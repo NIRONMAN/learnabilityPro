@@ -9,18 +9,16 @@ spring:
       enabled: true
 
   datasource:
-    url: ${DATABASE_URL:jdbc:postgresql://localhost:5432/learnability}
-    username: ${DATABASE_USER:postgres}
-    password: ${DATABASE_PASSWORD:postgres}
-    driver-class-name: org.postgresql.Driver
+    url: ${DATABASE_URL:jdbc:h2:mem:learnability;DB_CLOSE_DELAY=-1;MODE=PostgreSQL}
+    username: ${DATABASE_USER:sa}
+    password: ${DATABASE_PASSWORD:}
 
   jpa:
     hibernate:
-      ddl-auto: validate
+      ddl-auto: ${HIBERNATE_DDL_AUTO:update}
     properties:
       hibernate:
         format_sql: false
-        dialect: org.hibernate.dialect.PostgreSQLDialect
 
   flyway:
     enabled: ${FLYWAY_ENABLED:false}
@@ -30,20 +28,25 @@ spring:
   ai:
     google:
       genai:
+        project-id: ${GEMINI_PROJECT_ID:learnability-pro-dev}
         api-key: ${GEMINI_API_KEY:mock-key-for-development}
         chat:
           options:
             model: ${GEMINI_CHAT_MODEL:gemini-2.0-flash}
         embedding:
+          api-key: ${GEMINI_API_KEY:mock-key-for-development}
           options:
             model: ${GEMINI_EMBEDDING_MODEL:text-embedding-004}
     vectorstore:
       pgvector:
         table-name: vector_store
         dimensions: 768
-        distance-type: COSINE
+        distance-type: COSINE_DISTANCE
         index-type: HNSW
         initialize-schema: false
+
+  autoconfigure:
+    exclude: ${SPRING_AUTOCONFIGURE_EXCLUDE:org.springframework.ai.vectorstore.pgvector.autoconfigure.PgVectorStoreAutoConfiguration}
 
 application:
   jwt:
