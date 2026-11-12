@@ -3,6 +3,7 @@ const BACKEND_URL = process.env.BACKEND_URL || "http://localhost:8080";
 
 const nextConfig = {
   reactStrictMode: true,
+  compress: false,
   async rewrites() {
     return [
       {

@@ -59,7 +59,7 @@ export interface IngestResponse {
   summary: string;
 }
 
-const API_BASE = '/api';
+const API_BASE = process.env.NEXT_PUBLIC_BACKEND_URL || 'http://localhost:8080/api';
 
 export const authStorage = {
   getToken: () => (typeof window !== 'undefined' ? localStorage.getItem('token') : null),
@@ -159,8 +159,8 @@ export const api = {
 
         for (const line of lines) {
           if (line.startsWith('data:')) {
-            const data = line.slice(5).trim();
-            if (data === '[DONE]') {
+            const data = line.slice(5);
+            if (data.trim() === '[DONE]') {
               onComplete();
               return;
             }
@@ -168,6 +168,13 @@ export const api = {
               onChunk(data);
             }
           }
+        }
+      }
+
+      if (buffer.startsWith('data:')) {
+        const data = buffer.slice(5);
+        if (data.trim() !== '[DONE]' && data) {
+          onChunk(data);
         }
       }
       onComplete();

@@ -32,11 +32,11 @@ spring:
         api-key: ${GEMINI_API_KEY:mock-key-for-development}
         chat:
           options:
-            model: ${GEMINI_CHAT_MODEL:gemini-2.0-flash}
+            model: ${GEMINI_CHAT_MODEL:gemini-flash-lite-latest}
         embedding:
           api-key: ${GEMINI_API_KEY:mock-key-for-development}
           options:
-            model: ${GEMINI_EMBEDDING_MODEL:text-embedding-004}
+            model: ${GEMINI_EMBEDDING_MODEL:gemini-embedding-001}
     vectorstore:
       pgvector:
         table-name: vector_store
