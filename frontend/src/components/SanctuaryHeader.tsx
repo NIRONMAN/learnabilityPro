@@ -95,7 +95,7 @@ export function SanctuaryHeader({ onOpenCommandPalette }: { onOpenCommandPalette
           {/* Direct Workspace Access */}
           <Link
             href="/dashboard"
-            className="px-3.5 py-1.5 rounded-md text-xs font-semibold font-mono bg-gradient-to-r from-accent-cyan via-accent-indigo to-accent-violet text-white hover:opacity-95 transition-all flex items-center gap-1.5 shadow-sm shadow-indigo-500/20"
+            className="px-3.5 py-1.5 rounded-md text-xs font-semibold font-mono bg-accent-cyan text-slate-950 hover:bg-accent-cyan/90 transition-all flex items-center gap-1.5 shadow-sm shadow-cyan-500/20"
           >
             {hasToken ? (
               <>
