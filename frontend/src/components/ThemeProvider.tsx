@@ -48,9 +48,13 @@ export function ThemeProvider({ children }: { children: React.ReactNode }) {
   };
 
   const toggleTheme = () => {
-    const nextTheme: Theme =
-      theme === 'obsidian' ? 'aurora' : theme === 'aurora' ? 'blueprint' : 'obsidian';
-    setTheme(nextTheme);
+    setThemeState((curr) => {
+      const nextTheme: Theme =
+        curr === 'obsidian' ? 'aurora' : curr === 'aurora' ? 'blueprint' : 'obsidian';
+      localStorage.setItem('lp_theme', nextTheme);
+      applyThemeClasses(nextTheme);
+      return nextTheme;
+    });
   };
 
   return (

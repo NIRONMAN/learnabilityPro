@@ -3,7 +3,7 @@
 import React, { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
-import { authStorage } from '@/lib/api';
+import { api, authStorage } from '@/lib/api';
 import {
   BookOpen,
   MessageSquare,
@@ -42,45 +42,13 @@ import {
 
 type StudyMode = 'read' | 'interrogate' | 'diagram' | 'recall';
 
-interface DocMeta {
-  id: string;
+interface DocSection {
+  tag: string;
   title: string;
-  type: string;
-  authors: string;
-  venue: string;
-  readTime: string;
-  groundedScore: number;
+  body: string;
+  formula?: string;
+  formulaNote?: string;
 }
-
-const DOC_PRESETS: Record<string, DocMeta> = {
-  vaswani: {
-    id: 'vaswani',
-    title: 'Attention Is All You Need',
-    type: 'PDF Paper',
-    authors: 'Vaswani et al. (Google Brain & Research)',
-    venue: 'NeurIPS 2017 · Citations: 120k+',
-    readTime: '12 min',
-    groundedScore: 98.4
-  },
-  deepseek: {
-    id: 'deepseek',
-    title: 'DeepSeek-R1: Incentivizing Reasoning via RL',
-    type: 'arXiv Monograph',
-    authors: 'DeepSeek-AI Team',
-    venue: 'arXiv:2501.12948 (2025)',
-    readTime: '18 min',
-    groundedScore: 99.1
-  },
-  cs229: {
-    id: 'cs229',
-    title: 'Stanford CS229: Machine Learning Foundations',
-    type: 'Lecture Series',
-    authors: 'Prof. Andrew Ng',
-    venue: 'Stanford University (2023)',
-    readTime: '24 min',
-    groundedScore: 97.6
-  }
-};
 
 interface Flashcard {
   id: string;
@@ -91,32 +59,298 @@ interface Flashcard {
   box: number;
 }
 
-const FLASHCARD_DECK: Flashcard[] = [
-  {
-    id: 'fc-1',
-    question: 'Why does Scaled Dot-Product Attention divide logits by √d_k?',
-    answer: 'For large values of d_k, dot products grow large in magnitude, pushing softmax into regions with extremely small gradients. Dividing by √d_k counteracts this variance scaling and stabilizes backpropagation.',
-    citation: '§3.2.1 Scaled Dot-Product Attention (p. 4)',
-    interval: '3 days',
-    box: 2
+interface ConceptNode {
+  id: string;
+  layer: string;
+  title: string;
+  subtitle: string;
+  formula: string;
+  description: string;
+}
+
+interface DocMeta {
+  id: string;
+  title: string;
+  type: string;
+  authors: string;
+  venue: string;
+  readTime: string;
+  groundedScore: number;
+  sections: DocSection[];
+  flashcards: Flashcard[];
+  conceptNodes: ConceptNode[];
+  initialChat: {
+    welcome: string;
+    citation: { section: string; quote: string };
+  };
+  sampleProbes: string[];
+}
+
+const DOC_PRESETS: Record<string, DocMeta> = {
+  vaswani: {
+    id: 'vaswani',
+    title: 'Attention Is All You Need',
+    type: 'PDF Paper',
+    authors: 'Vaswani et al. (Google Brain & Google Research)',
+    venue: 'NeurIPS 2017 · Citations: 120k+',
+    readTime: '12 min',
+    groundedScore: 98.4,
+    sections: [
+      {
+        tag: '§ 1.0 Introduction',
+        title: 'Recurrence Bottleneck in Sequence Transduction',
+        body: 'Recurrent neural networks factor computation along the symbol positions of the input and output sequences. Aligning positions to steps in computation time, they generate a sequence of hidden states h_t. This inherently sequential nature precludes parallelization within training examples, which becomes critical at longer sequence lengths.'
+      },
+      {
+        tag: '§ 3.2 Multi-Head Attention Mechanism',
+        title: 'Scaled Dot-Product Projections',
+        body: 'An attention function can be described as mapping a query and a set of key-value pairs to an output. Instead of performing a single attention function of dimension d_model, we found it beneficial to linearly project queries, keys, and values h = 8 times with different, learned linear projections.',
+        formula: 'Attention(Q, K, V) = softmax(QKᵀ / √d_k)V',
+        formulaNote: 'Dividing by √d_k prevents the dot products from growing excessively large for large key dimensions, avoiding saturation in regions of vanishing gradients.'
+      }
+    ],
+    flashcards: [
+      {
+        id: 'fc-v1',
+        question: 'Why does Scaled Dot-Product Attention divide logits by √d_k?',
+        answer: 'For large values of d_k, dot products grow large in magnitude, pushing softmax into regions with extremely small gradients. Dividing by √d_k counteracts this variance scaling and stabilizes backpropagation.',
+        citation: '§3.2.1 Scaled Dot-Product Attention (p. 4)',
+        interval: '3 days',
+        box: 2
+      },
+      {
+        id: 'fc-v2',
+        question: 'What is the computational complexity per layer of Self-Attention vs Recurrent layers?',
+        answer: 'Self-Attention requires O(1) sequential operations with O(n² · d) total complexity, whereas Recurrent layers require O(n) sequential operations with O(n · d²) complexity, forming an unparallelizable bottleneck.',
+        citation: 'Table 1: Maximum path lengths & complexity (p. 6)',
+        interval: '6 days',
+        box: 3
+      },
+      {
+        id: 'fc-v3',
+        question: 'How does Multi-Head Attention outperform a single attention function of dimension d_model?',
+        answer: 'It jointly attends to information from different representation subspaces at different positions. A single attention head performs averaging which inhibits attending to multiple subspace relationships simultaneously.',
+        citation: '§3.2.2 Multi-Head Attention (p. 5)',
+        interval: '1 day',
+        box: 1
+      }
+    ],
+    conceptNodes: [
+      {
+        id: 'input',
+        layer: 'Layer 1 · Input Embedding',
+        title: 'Positional Encoding',
+        subtitle: 'Sinusoidal frequencies inject sequential order',
+        formula: 'PE(pos, 2i) = sin(pos / 10000^(2i/d_model))',
+        description: 'Because the Transformer contains no recurrence and no convolution, sequence order must be injected via deterministic trigonometric phase shifts across dimensions.'
+      },
+      {
+        id: 'mha',
+        layer: 'Layer 2 · Multi-Head Attention',
+        title: 'Multi-Head Attention (h=8)',
+        subtitle: '8 parallel subspace projections with √d_k scaling',
+        formula: 'MultiHead(Q,K,V) = Concat(head₁,...,head_h)W^O',
+        description: 'Queries, keys, and values are projected into d_k = 64 dimensional subspaces where attention maps are computed concurrently and concatenated.'
+      },
+      {
+        id: 'ffn',
+        layer: 'Layer 3 · Position-Wise FFN',
+        title: 'Feed-Forward Network',
+        subtitle: 'Position-wise two-layer linear transformation',
+        formula: 'FFN(x) = max(0, xW₁ + b₁)W₂ + b₂',
+        description: 'Applied identically to each position separately. Uses inner hidden dimension d_ff = 2048 with ReLU activation and residual skip connection.'
+      }
+    ],
+    initialChat: {
+      welcome: 'Welcome to the Vaswani et al. (2017) study session. The document is indexed with 98.4% grounded provenance. What concept or mathematical proof would you like to examine?',
+      citation: {
+        section: '§1.0 Abstract & Introduction',
+        quote: 'We propose the Transformer, a model architecture relying entirely on an attention mechanism to draw global dependencies between input and output.'
+      }
+    },
+    sampleProbes: [
+      'Why divide by √d_k instead of d_k?',
+      'Compare O(1) path length vs RNNs.',
+      'Explain sinusoidal positional encoding.'
+    ]
   },
-  {
-    id: 'fc-2',
-    question: 'What is the computational complexity per layer of Self-Attention vs Recurrent layers?',
-    answer: 'Self-Attention requires O(1) sequential operations with O(n² · d) total complexity, whereas Recurrent layers require O(n) sequential operations with O(n · d²) complexity, forming an unparallelizable bottleneck.',
-    citation: 'Table 1: Maximum path lengths & complexity (p. 6)',
-    interval: '6 days',
-    box: 3
+
+  deepseek: {
+    id: 'deepseek',
+    title: 'DeepSeek-R1: Incentivizing Reasoning via RL',
+    type: 'arXiv Monograph',
+    authors: 'DeepSeek-AI Team',
+    venue: 'arXiv:2501.12948 (2025)',
+    readTime: '18 min',
+    groundedScore: 99.1,
+    sections: [
+      {
+        tag: '§ 2.1 Rule-Based Reward Verification',
+        title: 'Eliminating Reward Model Hacking',
+        body: 'Traditional RLHF relies on neural reward models that suffer from reward hacking and drift during long chain-of-thought exploration. DeepSeek-R1 enforces deterministic rule-based verification: compiler pass/fail execution for code and ground-truth symbolic equivalence for mathematical proofs.'
+      },
+      {
+        tag: '§ 3.1 Group Relative Policy Optimization (GRPO)',
+        title: 'Critic-Free Reinforcement Learning',
+        body: 'To mitigate the substantial memory overhead of training a separate value network equal in size to the policy model, GRPO samples a group of G candidate outputs for each query and computes normalized relative advantages across the sampled group.',
+        formula: 'J_GRPO(θ) = E [ 1/G ∑ (min(r_i A_i, clip(...)A_i)) - β D_KL(π_θ || π_ref) ]',
+        formulaNote: 'Advantage A_i is computed by normalizing output rewards within the group: (R_i - mean(R)) / std(R), eliminating the need for a critic model.'
+      }
+    ],
+    flashcards: [
+      {
+        id: 'fc-d1',
+        question: 'Why does GRPO eliminate the critic (value) model required in standard PPO?',
+        answer: 'GRPO samples a group of candidate outputs {o_1, o_2, ..., o_G} for each prompt and estimates the baseline directly from the group mean and standard deviation, saving enormous GPU memory.',
+        citation: '§3.1 Group Relative Policy Optimization (p. 5)',
+        interval: '3 days',
+        box: 2
+      },
+      {
+        id: 'fc-d2',
+        question: 'What is the role of cold-start data before initiating large-scale RL?',
+        answer: 'A small curated dataset of high-quality long-chain reasoning traces formats the initial outputs with readable markdown, structured thinking tags (<think>...</think>), and prevents unreadable reasoning degeneracy.',
+        citation: '§2.2 Cold-Start Data Curation (p. 4)',
+        interval: '6 days',
+        box: 3
+      },
+      {
+        id: 'fc-d3',
+        question: 'How does DeepSeek-R1 prevent language mixing during multilingual reasoning?',
+        answer: 'A language consistency reward penalty is added to the reward signal during the second RL phase, discouraging spontaneous language switching inside reasoning chains.',
+        citation: '§3.3 Language Consistency Penalty (p. 8)',
+        interval: '1 day',
+        box: 1
+      }
+    ],
+    conceptNodes: [
+      {
+        id: 'input',
+        layer: 'Stage 1 · Cold Start',
+        title: 'Cold-Start Synthesis',
+        subtitle: 'Curated CoT reasoning demonstrations',
+        formula: 'D_cold = {(x, y_think, y_answer)}',
+        description: 'Supervised fine-tuning on thousands of curated multi-step solutions bootstraps readable thinking patterns and prevents early collapse.'
+      },
+      {
+        id: 'mha',
+        layer: 'Stage 2 · GRPO Core',
+        title: 'Group Advantage RL',
+        subtitle: 'Critic-free policy gradient with rule rewards',
+        formula: 'A_i = (R_i - mean(R)) / std(R)',
+        description: 'Candidate reasoning paths are scored by automated test cases and symbolic math verifiers, normalizing reward variance across output batches.'
+      },
+      {
+        id: 'ffn',
+        layer: 'Stage 3 · Distillation',
+        title: 'Knowledge Distillation',
+        subtitle: 'Distilling reasoning capabilities into smaller models',
+        formula: 'L_distill = KL(π_student || π_R1)',
+        description: '800k curated reasoning traces from DeepSeek-R1 are distilled directly into 1.5B, 7B, 14B, and 32B student models without RL.'
+      }
+    ],
+    initialChat: {
+      welcome: 'DeepSeek-R1 session active. The monograph is indexed with 99.1% grounded provenance. Ask about GRPO, rule-based rewards, or reasoning emergence.',
+      citation: {
+        section: '§1.0 Abstract & Overview',
+        quote: 'DeepSeek-R1-Zero demonstrates that reasoning capabilities naturally emerge through large-scale RL without supervised fine-tuning as a prerequisite.'
+      }
+    },
+    sampleProbes: [
+      'How does GRPO avoid training a value network?',
+      'Why is rule-based reward superior to RM in math?',
+      'Explain the <think> tag emergence in R1-Zero.'
+    ]
   },
-  {
-    id: 'fc-3',
-    question: 'How does Multi-Head Attention outperform a single attention function of dimension d_model?',
-    answer: 'It jointly attends to information from different representation subspaces at different positions. A single attention head performs averaging which inhibits attending to multiple subspace relationships simultaneously.',
-    citation: '§3.2.2 Multi-Head Attention (p. 5)',
-    interval: '1 day',
-    box: 1
+
+  cs229: {
+    id: 'cs229',
+    title: 'Stanford CS229: Machine Learning Foundations',
+    type: 'Lecture Series',
+    authors: 'Prof. Andrew Ng',
+    venue: 'Stanford University (2023)',
+    readTime: '24 min',
+    groundedScore: 97.6,
+    sections: [
+      {
+        tag: '§ 1.1 Supervised Learning & Linear Regression',
+        title: 'LMS Algorithm & Gradient Descent',
+        body: 'To perform supervised learning, we define the cost function J(θ) measuring the squared difference between the hypothesis h_θ(x) and ground truth targets y. The batch gradient descent update repeatedly steps in the negative gradient direction across all training examples.'
+      },
+      {
+        tag: '§ 1.2 The Normal Equations',
+        title: 'Closed-Form Matrix Derivation',
+        body: 'Rather than iterating with gradient descent, the optimal parameters θ that minimize J(θ) can be computed directly in closed form using matrix derivatives and setting the gradient ∇_θ J(θ) to zero.',
+        formula: 'θ = (XᵀX)⁻¹ Xᵀy',
+        formulaNote: 'Provided X has full column rank, XᵀX is strictly invertible, providing the global minimum in O(d³) algebraic matrix operations.'
+      }
+    ],
+    flashcards: [
+      {
+        id: 'fc-c1',
+        question: 'Under what mathematical conditions is XᵀX not invertible in the Normal Equations?',
+        answer: 'XᵀX is non-invertible if features are linearly dependent (collinear) or if the number of features d exceeds the number of training examples m (m < d). Regularization (e.g. Ridge / L2) restores invertibility.',
+        citation: 'Lecture Notes 1: Normal Equations (p. 11)',
+        interval: '3 days',
+        box: 2
+      },
+      {
+        id: 'fc-c2',
+        question: 'Compare computational complexity of Batch Gradient Descent vs Normal Equations.',
+        answer: 'Normal Equations require O(d³) for matrix inversion where d is feature dimension. Batch Gradient Descent requires O(m · d · iterations), making gradient descent superior when d is very large (e.g. d > 10,000).',
+        citation: 'Lecture 1: Computational Comparison (p. 13)',
+        interval: '6 days',
+        box: 3
+      },
+      {
+        id: 'fc-c3',
+        question: 'What is the probabilistic interpretation of least squares cost function J(θ)?',
+        answer: 'Assuming independent Gaussian noise ε ~ N(0, σ²) on targets y, minimizing squared error J(θ) is mathematically equivalent to Maximum Likelihood Estimation (MLE) of parameters θ.',
+        citation: 'Lecture Notes 1 §3: Probabilistic Interpretation (p. 14)',
+        interval: '1 day',
+        box: 1
+      }
+    ],
+    conceptNodes: [
+      {
+        id: 'input',
+        layer: 'Phase 1 · Hypothesis',
+        title: 'Feature Space & Hypothesis',
+        subtitle: 'Linear representation of input vector x',
+        formula: 'h_θ(x) = ∑ θ_j x_j = θᵀx',
+        description: 'Inputs are mapped to feature vectors with intercept term x_0 = 1, parameterized by weights vector θ.'
+      },
+      {
+        id: 'mha',
+        layer: 'Phase 2 · Loss Landscape',
+        title: 'Quadratic Cost Function',
+        subtitle: 'Convex surface guarantees global minimum',
+        formula: 'J(θ) = 1/2 ∑ (h_θ(x^(i)) - y^(i))²',
+        description: 'Because the Hessian of J(θ) is positive semi-definite (XᵀX >= 0), the loss surface is strictly convex with no local minima.'
+      },
+      {
+        id: 'ffn',
+        layer: 'Phase 3 · Closed Form',
+        title: 'Normal Equations Solution',
+        subtitle: 'Direct analytical minimization via matrix calculus',
+        formula: 'θ* = (XᵀX)⁻¹ Xᵀy',
+        description: 'Derived by equating the matrix derivative ∇_θ J(θ) = XᵀXθ - Xᵀy to zero, providing the exact optimal parameter vector in closed form.'
+      }
+    ],
+    initialChat: {
+      welcome: 'Stanford CS229 session active. The course literature is indexed with 97.6% grounded provenance. Ask about LMS, Normal Equations, or probabilistic interpretations.',
+      citation: {
+        section: '§1.0 Supervised Learning Foundations',
+        quote: 'Linear regression serves as the fundamental baseline for continuous value prediction and introduces key concepts of cost minimization.'
+      }
+    },
+    sampleProbes: [
+      'When does XᵀX fail to be invertible?',
+      'Why is least squares equivalent to Gaussian MLE?',
+      'Compare Batch Gradient Descent vs Normal Equations.'
+    ]
   }
-];
+};
 
 interface ChatMessage {
   id: string;
@@ -143,31 +377,23 @@ export default function LearnabilityLandingAndStudio() {
   } | null>(null);
 
   // Command palette & Ingestion modals
-  const [isCommandOpen, setIsCommandOpen] = useState(false);
   const [isIngestOpen, setIsIngestOpen] = useState(false);
   const [ingestType, setIngestType] = useState<'pdf' | 'arxiv' | 'youtube' | 'topic'>('pdf');
   const [ingestInput, setIngestInput] = useState('');
   const [isIngesting, setIsIngesting] = useState(false);
+  const [ingestStep, setIngestStep] = useState(0);
+
+  const doc = DOC_PRESETS[activeDocKey];
 
   // Socratic dialogue state
-  const [chatMessages, setChatMessages] = useState<ChatMessage[]>([
-    {
-      id: 'm1',
-      sender: 'assistant',
-      text: 'Welcome to the Vaswani et al. (2017) study session. The document is indexed with 98.4% grounded provenance. What concept or mathematical proof would you like to examine?',
-      citation: {
-        section: '§1.0 Abstract & Introduction',
-        quote: 'We propose the Transformer, a model architecture relying entirely on an attention mechanism to draw global dependencies between input and output.'
-      }
-    }
-  ]);
+  const [chatMessages, setChatMessages] = useState<ChatMessage[]>([]);
   const [inputQuery, setInputQuery] = useState('');
   const [isThinking, setIsThinking] = useState(false);
 
   // Active Recall state
   const [cardIndex, setCardIndex] = useState(0);
   const [isFlipped, setIsFlipped] = useState(false);
-  const [reviewedCount, setReviewedCount] = useState(0);
+  const [masteredCount, setMasteredCount] = useState(0);
 
   // Active Concept Node state in Diagram view
   const [activeConceptNode, setActiveConceptNode] = useState<string>('mha');
@@ -175,32 +401,35 @@ export default function LearnabilityLandingAndStudio() {
   // Guest pass / Auth
   const [isGeneratingPass, setIsGeneratingPass] = useState(false);
 
-  const doc = DOC_PRESETS[activeDocKey];
-  const activeCard = FLASHCARD_DECK[cardIndex];
+  // Initialize or reset chat and cards when doc changes
+  useEffect(() => {
+    setChatMessages([
+      {
+        id: `m-init-${doc.id}`,
+        sender: 'assistant',
+        text: doc.initialChat.welcome,
+        citation: doc.initialChat.citation
+      }
+    ]);
+    setCardIndex(0);
+    setIsFlipped(false);
+    setActiveConceptNode('mha');
+  }, [activeDocKey]);
 
-  // Global keyboard shortcuts and header event listener
+  const activeCard = doc.flashcards[cardIndex] || doc.flashcards[0];
+  const activeNode = doc.conceptNodes.find((n) => n.id === activeConceptNode) || doc.conceptNodes[0];
+
+  // Global keyboard shortcuts (Escape to close modals)
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
-      if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === 'k') {
-        e.preventDefault();
-        setIsCommandOpen((prev) => !prev);
-      }
       if (e.key === 'Escape') {
-        setIsCommandOpen(false);
         setIsIngestOpen(false);
         setSelectionPopover(null);
       }
     };
 
-    const handleOpenPalette = () => setIsCommandOpen(true);
-
     window.addEventListener('keydown', handleKeyDown);
-    window.addEventListener('open-command-palette', handleOpenPalette);
-
-    return () => {
-      window.removeEventListener('keydown', handleKeyDown);
-      window.removeEventListener('open-command-palette', handleOpenPalette);
-    };
+    return () => window.removeEventListener('keydown', handleKeyDown);
   }, []);
 
   // Handle text selection in reader
@@ -233,7 +462,7 @@ export default function LearnabilityLandingAndStudio() {
   const handleExplainSelection = (customQuery?: string) => {
     const query =
       customQuery ||
-      (selectionPopover ? `Can you explain the significance of "${selectionPopover.text}" in detail?` : '');
+      (selectionPopover ? `Can you explain the mathematical significance of "${selectionPopover.text}" in detail?` : '');
     if (!query) return;
 
     setActiveMode('interrogate');
@@ -259,37 +488,38 @@ export default function LearnabilityLandingAndStudio() {
     setTimeout(() => {
       let replyText = '';
       let replyCitation = {
-        section: '§3.2 Multi-Head Attention',
-        quote:
-          'Multi-head attention allows the model to jointly attend to information from different representation subspaces at different positions.'
+        section: doc.sections[0]?.tag || '§ Literature Source',
+        quote: doc.sections[0]?.body.slice(0, 110) + '...'
       };
 
       const lower = query.toLowerCase();
-      if (
-        lower.includes('scale') ||
-        lower.includes('root') ||
-        lower.includes('variance') ||
-        lower.includes('d_k')
-      ) {
+      if (lower.includes('scale') || lower.includes('root') || lower.includes('variance') || lower.includes('d_k')) {
         replyText =
-          'The scaling factor 1/√d_k is mathematically critical. When d_k is large, the dot products grow large, pushing the softmax function into regions of extremely small gradients. Multiplying by 1/√d_k scales the variance back to 1.';
+          'The scaling factor 1/√d_k is mathematically critical. When d_k is large, the dot products grow large, pushing the softmax function into regions of extremely small gradients. Multiplying by 1/√d_k scales the variance back to 1 and stabilizes gradient propagation.';
         replyCitation = {
-          section: '§3.2.1 Scaled Dot-Product Attention',
-          quote:
-            'To illustrate why the dot products get large, assume that the components of q and k are independent random variables with mean 0 and variance 1. Then their dot product has mean 0 and variance d_k.'
+          section: '§ 3.2.1 Scaled Dot-Product Attention',
+          quote: 'To illustrate why the dot products get large, assume that components of q and k are independent random variables with mean 0 and variance 1. Then their dot product has mean 0 and variance d_k.'
         };
-      } else if (
-        lower.includes('complexity') ||
-        lower.includes('o(1)') ||
-        lower.includes('rnn') ||
-        lower.includes('path')
-      ) {
+      } else if (lower.includes('grpo') || lower.includes('critic') || lower.includes('reward')) {
+        replyText =
+          'Group Relative Policy Optimization (GRPO) bypasses the memory-intensive critic model by sampling multiple responses for each question and using the empirical group mean as the baseline. Advantages are normalized directly via A_i = (R_i - mean(R)) / std(R).';
+        replyCitation = {
+          section: '§ 3.1 Group Relative Policy Optimization',
+          quote: 'For each question q, GRPO samples a group of outputs {o_1, o_2, ..., o_G} from the old policy and optimizes the policy model by maximizing group relative advantage.'
+        };
+      } else if (lower.includes('normal') || lower.includes('invert') || lower.includes('lms') || lower.includes('gradient')) {
+        replyText =
+          'The Normal Equations θ = (XᵀX)⁻¹ Xᵀy provide the analytical solution where ∇_θ J(θ) = 0. If features are collinear or m < d, XᵀX is singular and cannot be inverted, in which case Batch Gradient Descent or L2 ridge regularization must be applied.';
+        replyCitation = {
+          section: '§ 1.2 The Normal Equations & Invertibility',
+          quote: 'Provided X has full column rank, XᵀX is invertible. If XᵀX is non-invertible, the pseudoinverse pinv(XᵀX) provides the minimum-norm least squares solution.'
+        };
+      } else if (lower.includes('complexity') || lower.includes('o(1)') || lower.includes('rnn') || lower.includes('path')) {
         replyText =
           'In recurrent layers (RNNs), passing information between two distant positions requires O(n) sequential steps. In Self-Attention, the maximum path length between any two words is strictly O(1), allowing gradients to propagate directly without sequential degradation.';
         replyCitation = {
-          section: '§4.0 Table 1: Maximum Path Lengths',
-          quote:
-            'Self-Attention layer: O(1) sequential operations, O(n² · d) complexity per layer, O(1) maximum path length.'
+          section: '§ 4.0 Table 1: Maximum Path Lengths',
+          quote: 'Self-Attention layer: O(1) sequential operations, O(n² · d) complexity per layer, O(1) maximum path length.'
         };
       } else {
         replyText = `Based on grounded analysis of ${doc.title}: this mechanism decouples sequence transformation from recurrent state tracking. The attention weights dynamically construct a weighted adjacency matrix over the entire context window in parallel.`;
@@ -305,34 +535,59 @@ export default function LearnabilityLandingAndStudio() {
         }
       ]);
       setIsThinking(false);
-    }, 700);
+    }, 650);
   };
 
-  // 1-Click Guest Pass
-  const handleQuickScholarPass = () => {
+  // 1-Click Scholar Pass (authenticates with backend or sets fallback scholar session)
+  const handleQuickScholarPass = async () => {
     setIsGeneratingPass(true);
-    setTimeout(() => {
+    try {
+      const auth = await api.login({ email: 'scholar@learnability.pro', password: 'password123' })
+        .catch(async () => {
+          return await api.register({ email: 'scholar@learnability.pro', password: 'password123', name: 'Dr. Scholar' });
+        });
+      if (auth?.token) {
+        authStorage.setToken(auth.token);
+      } else {
+        authStorage.setToken('guest_scholar_token_distraction_free');
+      }
+    } catch {
       authStorage.setToken('guest_scholar_token_distraction_free');
+    } finally {
       setIsGeneratingPass(false);
       router.push('/dashboard');
-    }, 400);
+    }
   };
 
-  // Ingestion mock submission
+  // Ingestion mock submission with progressive 4-phase indexing telemetry
   const handleIngestSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     if (!ingestInput.trim()) return;
 
     setIsIngesting(true);
-    setTimeout(() => {
-      setIsIngesting(false);
-      setIsIngestOpen(false);
-      setIngestInput('');
-      setActiveDocKey('deepseek');
-      setActiveMode('read');
-      const studioElem = document.getElementById('live-studio');
-      if (studioElem) studioElem.scrollIntoView({ behavior: 'smooth' });
-    }, 850);
+    setIngestStep(1);
+
+    const t1 = setTimeout(() => setIngestStep(2), 250);
+    const t2 = setTimeout(() => setIngestStep(3), 500);
+    const t3 = setTimeout(() => {
+      setIngestStep(4);
+      setTimeout(() => {
+        setIsIngesting(false);
+        setIsIngestOpen(false);
+        setIngestInput('');
+        setIngestStep(0);
+        setActiveDocKey('deepseek');
+        setActiveMode('read');
+        const studioElem = document.getElementById('live-studio');
+        if (studioElem) studioElem.scrollIntoView({ behavior: 'smooth' });
+      }, 350);
+    }, 750);
+
+    return () => {
+      clearTimeout(t1);
+      clearTimeout(t2);
+      clearTimeout(t3);
+    };
   };
 
   return (
@@ -375,10 +630,10 @@ export default function LearnabilityLandingAndStudio() {
             <button
               onClick={handleQuickScholarPass}
               disabled={isGeneratingPass}
-              className="px-5 py-3 rounded-lg border border-rule-border bg-surface hover:bg-surface-elevated text-ink-primary font-semibold transition-all flex items-center gap-2"
+              className="px-5 py-3 rounded-lg border border-rule-border bg-surface hover:bg-surface-elevated text-ink-primary font-semibold transition-all flex items-center gap-2 cursor-pointer shadow-sm"
             >
               <GraduationCap className="w-4 h-4 text-accent-cyan" />
-              <span>{isGeneratingPass ? 'Activating Pass...' : '1-Click Scholar Pass'}</span>
+              <span>{isGeneratingPass ? 'Entering Studio...' : '1-Click Scholar Pass'}</span>
             </button>
 
             <a
@@ -531,7 +786,7 @@ export default function LearnabilityLandingAndStudio() {
               The Distraction-Free Study Studio
             </h2>
             <p className="text-xs text-ink-muted font-mono">
-              Test-drive all 4 learning modalities right here with Vaswani et al. (2017)
+              Test-drive all 4 learning modalities right here with {doc.title}
             </p>
           </div>
 
@@ -543,11 +798,11 @@ export default function LearnabilityLandingAndStudio() {
               <select
                 value={activeDocKey}
                 onChange={(e) => setActiveDocKey(e.target.value)}
-                className="bg-surface-elevated border border-rule-border text-ink-primary text-xs rounded-md px-2.5 py-1.5 font-mono focus:outline-none focus:border-accent-cyan transition-colors"
+                className="bg-surface-elevated border border-rule-border text-ink-primary text-xs rounded-md px-2.5 py-1.5 font-mono focus:outline-none focus:border-accent-cyan transition-colors cursor-pointer"
               >
                 <option value="vaswani">Vaswani et al. (2017) · Attention Is All You Need</option>
                 <option value="deepseek">DeepSeek-R1 (2025) · Reasoning via RL</option>
-                <option value="cs229">Stanford CS229 · Machine Learning Lectures</option>
+                <option value="cs229">Stanford CS229 · Machine Learning Foundations</option>
               </select>
             </div>
 
@@ -555,7 +810,7 @@ export default function LearnabilityLandingAndStudio() {
             <div className="flex items-center bg-surface-elevated p-1 rounded-lg border border-rule-border">
               <button
                 onClick={() => setActiveMode('read')}
-                className={`px-3 py-1 rounded-md text-xs font-mono transition-all flex items-center gap-1.5 ${
+                className={`px-3 py-1 rounded-md text-xs font-mono transition-all flex items-center gap-1.5 cursor-pointer ${
                   activeMode === 'read'
                     ? 'bg-canvas text-accent-cyan shadow-sm border border-rule-border font-medium'
                     : 'text-ink-muted hover:text-ink-primary'
@@ -567,7 +822,7 @@ export default function LearnabilityLandingAndStudio() {
 
               <button
                 onClick={() => setActiveMode('interrogate')}
-                className={`px-3 py-1 rounded-md text-xs font-mono transition-all flex items-center gap-1.5 ${
+                className={`px-3 py-1 rounded-md text-xs font-mono transition-all flex items-center gap-1.5 cursor-pointer ${
                   activeMode === 'interrogate'
                     ? 'bg-canvas text-accent-cyan shadow-sm border border-rule-border font-medium'
                     : 'text-ink-muted hover:text-ink-primary'
@@ -579,7 +834,7 @@ export default function LearnabilityLandingAndStudio() {
 
               <button
                 onClick={() => setActiveMode('diagram')}
-                className={`px-3 py-1 rounded-md text-xs font-mono transition-all flex items-center gap-1.5 ${
+                className={`px-3 py-1 rounded-md text-xs font-mono transition-all flex items-center gap-1.5 cursor-pointer ${
                   activeMode === 'diagram'
                     ? 'bg-canvas text-accent-cyan shadow-sm border border-rule-border font-medium'
                     : 'text-ink-muted hover:text-ink-primary'
@@ -591,21 +846,21 @@ export default function LearnabilityLandingAndStudio() {
 
               <button
                 onClick={() => setActiveMode('recall')}
-                className={`px-3 py-1 rounded-md text-xs font-mono transition-all flex items-center gap-1.5 ${
+                className={`px-3 py-1 rounded-md text-xs font-mono transition-all flex items-center gap-1.5 cursor-pointer ${
                   activeMode === 'recall'
                     ? 'bg-canvas text-accent-cyan shadow-sm border border-rule-border font-medium'
                     : 'text-ink-muted hover:text-ink-primary'
                 }`}
               >
                 <RotateCcw className="w-3.5 h-3.5" />
-                <span>4. Recall ({FLASHCARD_DECK.length})</span>
+                <span>4. Recall ({doc.flashcards.length})</span>
               </button>
             </div>
 
             {/* Ingestion Trigger Button */}
             <button
               onClick={() => setIsIngestOpen(true)}
-              className="px-3 py-1.5 text-xs font-mono rounded-md bg-accent-cyan/10 hover:bg-accent-cyan/20 border border-accent-cyan/30 text-accent-cyan font-medium flex items-center gap-1.5 transition-colors"
+              className="px-3 py-1.5 text-xs font-mono rounded-md bg-accent-cyan/10 hover:bg-accent-cyan/20 border border-accent-cyan/30 text-accent-cyan font-medium flex items-center gap-1.5 transition-colors cursor-pointer"
             >
               <Plus className="w-3.5 h-3.5" />
               <span>Ingest New Material</span>
@@ -640,43 +895,42 @@ export default function LearnabilityLandingAndStudio() {
                 </div>
 
                 <article className="space-y-6 text-[15px] leading-relaxed text-ink-body">
-                  <section>
-                    <div className="text-xs font-mono text-accent-cyan font-semibold mb-1">§ 1.0 Introduction</div>
-                    <p>
-                      Recurrent neural networks factor computation along the symbol positions of the input and output sequences. Aligning positions to steps in computation time, they generate a sequence of hidden states <code className="text-xs font-mono px-1 py-0.5 rounded bg-surface-elevated text-ink-primary">h_t</code>. This inherently sequential nature precludes parallelization within training examples.
-                    </p>
-                  </section>
-
-                  <section className="p-4 rounded-lg bg-surface border border-rule-border">
-                    <div className="text-xs font-mono text-accent-cyan font-semibold mb-1">
-                      § 3.2 Multi-Head Attention Mechanism
-                    </div>
-                    <p className="text-sm">
-                      An attention function can be described as mapping a query and a set of key-value pairs to an output. Instead of performing a single attention function, we found it beneficial to linearly project queries, keys, and values <code className="text-xs font-mono px-1 py-0.5 rounded bg-surface-elevated text-ink-primary">h = 8</code> times with different, learned linear projections.
-                    </p>
-                    <div className="my-4 p-3 rounded bg-canvas border border-rule-border text-center font-mono text-sm text-ink-primary">
-                      Attention(<span className="text-accent-cyan font-semibold">Q</span>, <span className="text-accent-cyan font-semibold">K</span>, <span className="text-accent-cyan font-semibold">V</span>) = softmax(QKᵀ / √d_k)V
-                    </div>
-                    <p className="text-xs text-ink-muted">
-                      Dividing by <code className="font-mono text-ink-primary">√d_k</code> prevents the dot products from growing large, avoiding saturation in regions of vanishing gradients.
-                    </p>
-                  </section>
+                  {doc.sections.map((sec, idx) => (
+                    <section key={idx} className={sec.formula ? "p-4 rounded-lg bg-surface border border-rule-border" : ""}>
+                      <div className="text-xs font-mono text-accent-cyan font-semibold mb-1">
+                        {sec.tag}
+                      </div>
+                      <p className="text-sm text-ink-body leading-relaxed mb-2">
+                        {sec.body}
+                      </p>
+                      {sec.formula && (
+                        <div className="my-3 p-3 rounded bg-canvas border border-rule-border text-center font-mono text-sm text-ink-primary font-medium">
+                          {sec.formula}
+                        </div>
+                      )}
+                      {sec.formulaNote && (
+                        <p className="text-xs text-ink-muted">
+                          {sec.formulaNote}
+                        </p>
+                      )}
+                    </section>
+                  ))}
 
                   {/* Fast Jump CTAs */}
                   <div className="pt-4 flex items-center justify-between border-t border-rule-border">
                     <button
                       onClick={() => {
                         setActiveMode('interrogate');
-                        handleSendMessage('Explain why √d_k variance normalization is required.');
+                        handleSendMessage(doc.sampleProbes[0] || 'Explain the mathematical foundation of this section.');
                       }}
-                      className="text-xs font-mono text-accent-cyan hover:underline flex items-center gap-1"
+                      className="text-xs font-mono text-accent-cyan hover:underline flex items-center gap-1 cursor-pointer"
                     >
                       <Sparkles className="w-3.5 h-3.5" />
-                      <span>Ask Socratic AI about §3.2</span>
+                      <span>Ask Socratic AI about §1</span>
                     </button>
                     <button
                       onClick={() => setActiveMode('diagram')}
-                      className="text-xs font-mono text-ink-muted hover:text-ink-primary flex items-center gap-1"
+                      className="text-xs font-mono text-ink-muted hover:text-ink-primary flex items-center gap-1 cursor-pointer"
                     >
                       <span>View Concept Relationship Tree</span>
                       <ChevronRight className="w-3.5 h-3.5" />
@@ -697,7 +951,7 @@ export default function LearnabilityLandingAndStudio() {
                   >
                     <button
                       onClick={() => handleExplainSelection()}
-                      className="px-2.5 py-1 rounded bg-accent-cyan/10 hover:bg-accent-cyan/20 text-accent-cyan flex items-center gap-1 transition-colors"
+                      className="px-2.5 py-1 rounded bg-accent-cyan/10 hover:bg-accent-cyan/20 text-accent-cyan flex items-center gap-1 transition-colors cursor-pointer"
                     >
                       <Sparkles className="w-3 h-3" />
                       <span>Explain with AI</span>
@@ -707,14 +961,14 @@ export default function LearnabilityLandingAndStudio() {
                         setActiveMode('recall');
                         setSelectionPopover(null);
                       }}
-                      className="px-2.5 py-1 rounded hover:bg-surface text-ink-muted hover:text-ink-primary flex items-center gap-1 transition-colors"
+                      className="px-2.5 py-1 rounded hover:bg-surface text-ink-muted hover:text-ink-primary flex items-center gap-1 transition-colors cursor-pointer"
                     >
                       <RotateCcw className="w-3 h-3" />
                       <span>Flashcard</span>
                     </button>
                     <button
                       onClick={() => setSelectionPopover(null)}
-                      className="p-1 rounded hover:bg-surface text-ink-muted hover:text-ink-primary"
+                      className="p-1 rounded hover:bg-surface text-ink-muted hover:text-ink-primary cursor-pointer"
                     >
                       <X className="w-3 h-3" />
                     </button>
@@ -729,28 +983,30 @@ export default function LearnabilityLandingAndStudio() {
             {activeMode === 'interrogate' && (
               <div className="grid grid-cols-1 md:grid-cols-2 gap-6 items-start">
                 {/* Left: Anchored Reference */}
-                <div className="rounded-xl border border-rule-border bg-surface p-5 text-sm max-h-[460px] overflow-y-auto">
+                <div className="rounded-xl border border-rule-border bg-surface p-5 text-sm max-h-[480px] overflow-y-auto">
                   <div className="flex items-center justify-between pb-2 mb-3 border-b border-rule-border font-mono text-xs text-ink-muted">
                     <span className="font-semibold text-ink-primary">Grounded Document Excerpt</span>
-                    <span className="text-accent-emerald flex items-center gap-1">
-                      <ShieldCheck className="w-3.5 h-3.5" /> 98.4% Provenance
+                    <span className="text-accent-emerald flex items-center gap-1 font-semibold">
+                      <ShieldCheck className="w-3.5 h-3.5" /> {doc.groundedScore}% Provenance
                     </span>
                   </div>
                   <div className="space-y-3 text-xs leading-relaxed text-ink-body">
-                    <div className="p-3 rounded bg-accent-cyan/5 border-l-2 border-accent-cyan">
-                      <strong>§ 3.2.1 Scaled Dot-Product Attention:</strong> We compute dot products of the query with all keys, divide each by √d_k, and apply a softmax function to obtain weights on values.
-                    </div>
-                    <div className="p-3 rounded bg-surface-elevated font-mono text-center">
-                      Attention(Q, K, V) = softmax(QKᵀ / √d_k)V
-                    </div>
-                    <p className="text-ink-muted">
-                      <strong>§ 4.0 Table 1:</strong> Maximum path length between any two word positions is O(1) in self-attention, compared to O(n) in recurrent layers.
-                    </p>
+                    {doc.sections.map((sec, idx) => (
+                      <div key={idx} className="p-3 rounded bg-surface-elevated border border-rule-border">
+                        <div className="font-bold text-accent-cyan mb-1">{sec.tag}</div>
+                        <p>{sec.body}</p>
+                        {sec.formula && (
+                          <div className="my-2 p-2 rounded bg-canvas font-mono text-center text-ink-primary text-[11px]">
+                            {sec.formula}
+                          </div>
+                        )}
+                      </div>
+                    ))}
                   </div>
                 </div>
 
                 {/* Right: Dialogue Box */}
-                <div className="rounded-xl border border-rule-border bg-surface flex flex-col h-[460px]">
+                <div className="rounded-xl border border-rule-border bg-surface flex flex-col h-[480px]">
                   <div className="px-4 py-3 border-b border-rule-border font-mono text-xs flex items-center justify-between">
                     <span className="font-semibold text-ink-primary flex items-center gap-1.5">
                       <Sparkles className="w-3.5 h-3.5 text-accent-cyan" />
@@ -779,7 +1035,7 @@ export default function LearnabilityLandingAndStudio() {
                             <span className="text-accent-emerald font-semibold block mb-0.5">
                               ✓ {msg.citation.section}
                             </span>
-                            <span className="italic text-ink-subtle">"{msg.citation.quote}"</span>
+                            <span className="italic text-ink-subtle">&quot;{msg.citation.quote}&quot;</span>
                           </div>
                         )}
                       </div>
@@ -795,18 +1051,15 @@ export default function LearnabilityLandingAndStudio() {
 
                   {/* Quick Probe Prompts */}
                   <div className="px-3 py-2 border-t border-rule-border flex gap-2 overflow-x-auto text-[11px] font-mono">
-                    <button
-                      onClick={() => handleSendMessage('Why divide by √d_k instead of d_k?')}
-                      className="px-2.5 py-1 rounded-full border border-rule-border hover:border-accent-cyan bg-canvas text-ink-muted hover:text-ink-primary whitespace-nowrap transition-colors"
-                    >
-                      Why √d_k?
-                    </button>
-                    <button
-                      onClick={() => handleSendMessage('Compare O(1) path length vs RNNs.')}
-                      className="px-2.5 py-1 rounded-full border border-rule-border hover:border-accent-cyan bg-canvas text-ink-muted hover:text-ink-primary whitespace-nowrap transition-colors"
-                    >
-                      O(1) vs RNN
-                    </button>
+                    {doc.sampleProbes.map((probe, i) => (
+                      <button
+                        key={i}
+                        onClick={() => handleSendMessage(probe)}
+                        className="px-2.5 py-1 rounded-full border border-rule-border hover:border-accent-cyan bg-canvas text-ink-muted hover:text-ink-primary whitespace-nowrap transition-colors cursor-pointer"
+                      >
+                        {probe}
+                      </button>
+                    ))}
                   </div>
 
                   {/* Input Form */}
@@ -827,7 +1080,7 @@ export default function LearnabilityLandingAndStudio() {
                     <button
                       type="submit"
                       disabled={!inputQuery.trim() || isThinking}
-                      className="p-2 rounded-md bg-accent-cyan text-slate-950 hover:bg-accent-cyan/90 disabled:opacity-40"
+                      className="p-2 rounded-md bg-accent-cyan text-slate-950 hover:bg-accent-cyan/90 disabled:opacity-40 cursor-pointer"
                     >
                       <Send className="w-3.5 h-3.5" />
                     </button>
@@ -844,92 +1097,44 @@ export default function LearnabilityLandingAndStudio() {
                 <div className="flex items-center justify-between pb-3 mb-6 border-b border-rule-border font-mono text-xs text-ink-muted">
                   <span className="font-semibold text-ink-primary flex items-center gap-1.5">
                     <Network className="w-3.5 h-3.5 text-accent-cyan" />
-                    Mermaid Concept DAG: Vaswani et al. Architecture
+                    Concept Relationship DAG · {doc.title}
                   </span>
                   <span className="text-[11px] text-accent-cyan">Interactive Nodes</span>
                 </div>
 
-                {/* Visual Concept Flowchart Mockup */}
+                {/* Visual Concept Flowchart Nodes */}
                 <div className="space-y-4">
                   <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 font-mono text-xs">
-                    {/* Node 1 */}
-                    <button
-                      onClick={() => setActiveConceptNode('input')}
-                      className={`p-4 rounded-xl border text-left transition-all ${
-                        activeConceptNode === 'input'
-                          ? 'border-accent-cyan bg-accent-cyan/10 text-accent-cyan shadow-md'
-                          : 'border-rule-border bg-surface text-ink-muted hover:text-ink-primary'
-                      }`}
-                    >
-                      <div className="text-[10px] text-ink-muted uppercase mb-1">Layer 1</div>
-                      <div className="font-bold text-sm mb-1 text-ink-primary">Positional Encoding</div>
-                      <div className="text-[11px] leading-tight">Sinusoidal frequencies inject sequential order</div>
-                    </button>
-
-                    {/* Node 2 */}
-                    <button
-                      onClick={() => setActiveConceptNode('mha')}
-                      className={`p-4 rounded-xl border text-left transition-all ${
-                        activeConceptNode === 'mha'
-                          ? 'border-accent-cyan bg-accent-cyan/10 text-accent-cyan shadow-md'
-                          : 'border-rule-border bg-surface text-ink-muted hover:text-ink-primary'
-                      }`}
-                    >
-                      <div className="text-[10px] text-ink-muted uppercase mb-1">Layer 2 (Core)</div>
-                      <div className="font-bold text-sm mb-1 text-ink-primary">Multi-Head Attention</div>
-                      <div className="text-[11px] leading-tight">8 parallel subspace projections with √d_k scaling</div>
-                    </button>
-
-                    {/* Node 3 */}
-                    <button
-                      onClick={() => setActiveConceptNode('ffn')}
-                      className={`p-4 rounded-xl border text-left transition-all ${
-                        activeConceptNode === 'ffn'
-                          ? 'border-accent-cyan bg-accent-cyan/10 text-accent-cyan shadow-md'
-                          : 'border-rule-border bg-surface text-ink-muted hover:text-ink-primary'
-                      }`}
-                    >
-                      <div className="text-[10px] text-ink-muted uppercase mb-1">Layer 3</div>
-                      <div className="font-bold text-sm mb-1 text-ink-primary">Feed-Forward Network</div>
-                      <div className="text-[11px] leading-tight">Position-wise two-layer linear transformation</div>
-                    </button>
+                    {doc.conceptNodes.map((node) => (
+                      <button
+                        key={node.id}
+                        onClick={() => setActiveConceptNode(node.id)}
+                        className={`p-4 rounded-xl border text-left transition-all cursor-pointer ${
+                          activeConceptNode === node.id
+                            ? 'border-accent-cyan bg-accent-cyan/10 text-accent-cyan shadow-md'
+                            : 'border-rule-border bg-surface text-ink-muted hover:text-ink-primary hover:border-rule-strong'
+                        }`}
+                      >
+                        <div className="text-[10px] text-ink-muted uppercase mb-1">{node.layer}</div>
+                        <div className="font-bold text-sm mb-1 text-ink-primary">{node.title}</div>
+                        <div className="text-[11px] leading-tight">{node.subtitle}</div>
+                      </button>
+                    ))}
                   </div>
 
                   {/* Relationship Inspector Box */}
                   <div className="p-5 rounded-xl border border-rule-border bg-surface font-mono text-xs">
                     <div className="text-ink-muted text-[11px] mb-2 uppercase tracking-wider">
-                      Selected Relationship & Structural Verification:
+                      Selected Node & Structural Verification:
                     </div>
-                    {activeConceptNode === 'input' && (
-                      <div>
-                        <div className="font-bold text-ink-primary text-sm mb-1">
-                          Positional Encodings: PE(pos, 2i) = sin(pos/10000^(2i/d_model))
-                        </div>
-                        <p className="text-ink-body font-sans text-xs leading-relaxed mt-2">
-                          Because the model contains no recurrence and no convolution, for it to use the order of the sequence, we must inject information about relative or absolute positions.
-                        </p>
+                    <div>
+                      <div className="font-bold text-ink-primary text-sm mb-1">
+                        {activeNode.title}: {activeNode.formula}
                       </div>
-                    )}
-                    {activeConceptNode === 'mha' && (
-                      <div>
-                        <div className="font-bold text-ink-primary text-sm mb-1">
-                          Multi-Head Attention: Concat(head_1, ..., head_8)W^O
-                        </div>
-                        <p className="text-ink-body font-sans text-xs leading-relaxed mt-2">
-                          Multi-head attention allows the model to jointly attend to information from different representation subspaces. Each head linearly projects queries, keys, and values to d_k = 64 dimensions.
-                        </p>
-                      </div>
-                    )}
-                    {activeConceptNode === 'ffn' && (
-                      <div>
-                        <div className="font-bold text-ink-primary text-sm mb-1">
-                          Position-Wise FFN: max(0, xW_1 + b_1)W_2 + b_2
-                        </div>
-                        <p className="text-ink-body font-sans text-xs leading-relaxed mt-2">
-                          While the linear transformations are identical across different positions, they use different parameters from layer to layer. The inner-layer dimensionality is d_ff = 2048.
-                        </p>
-                      </div>
-                    )}
+                      <p className="text-ink-body font-sans text-xs leading-relaxed mt-2">
+                        {activeNode.description}
+                      </p>
+                    </div>
                   </div>
                 </div>
               </div>
@@ -945,7 +1150,7 @@ export default function LearnabilityLandingAndStudio() {
                     <RotateCcw className="w-3.5 h-3.5 text-accent-cyan" />
                     <span>Leitner Deck: {doc.title}</span>
                   </span>
-                  <span>Card {cardIndex + 1} of {FLASHCARD_DECK.length}</span>
+                  <span>Card {cardIndex + 1} of {doc.flashcards.length} · Mastered: {masteredCount}</span>
                 </div>
 
                 {/* 3D Flip Card */}
@@ -980,36 +1185,38 @@ export default function LearnabilityLandingAndStudio() {
                     <button
                       onClick={() => {
                         setIsFlipped(false);
-                        setCardIndex((prev) => (prev + 1) % FLASHCARD_DECK.length);
+                        setCardIndex((prev) => (prev + 1) % doc.flashcards.length);
                       }}
-                      className="flex-1 py-2 rounded-lg border border-red-500/30 bg-red-500/10 text-red-400 hover:bg-red-500/20 text-center"
+                      className="flex-1 py-2 rounded-lg border border-red-500/30 bg-red-500/10 text-red-400 hover:bg-red-500/20 text-center cursor-pointer transition-colors"
                     >
                       Again (1d)
                     </button>
                     <button
                       onClick={() => {
                         setIsFlipped(false);
-                        setCardIndex((prev) => (prev + 1) % FLASHCARD_DECK.length);
+                        setCardIndex((prev) => (prev + 1) % doc.flashcards.length);
                       }}
-                      className="flex-1 py-2 rounded-lg border border-amber-500/30 bg-amber-500/10 text-amber-400 hover:bg-amber-500/20 text-center"
+                      className="flex-1 py-2 rounded-lg border border-amber-500/30 bg-amber-500/10 text-amber-400 hover:bg-amber-500/20 text-center cursor-pointer transition-colors"
                     >
                       Hard (3d)
                     </button>
                     <button
                       onClick={() => {
                         setIsFlipped(false);
-                        setCardIndex((prev) => (prev + 1) % FLASHCARD_DECK.length);
+                        setMasteredCount((m) => m + 1);
+                        setCardIndex((prev) => (prev + 1) % doc.flashcards.length);
                       }}
-                      className="flex-1 py-2 rounded-lg border border-accent-cyan/30 bg-accent-cyan/10 text-accent-cyan hover:bg-accent-cyan/20 text-center"
+                      className="flex-1 py-2 rounded-lg border border-accent-cyan/30 bg-accent-cyan/10 text-accent-cyan hover:bg-accent-cyan/20 text-center cursor-pointer transition-colors"
                     >
                       Good (6d)
                     </button>
                     <button
                       onClick={() => {
                         setIsFlipped(false);
-                        setCardIndex((prev) => (prev + 1) % FLASHCARD_DECK.length);
+                        setMasteredCount((m) => m + 1);
+                        setCardIndex((prev) => (prev + 1) % doc.flashcards.length);
                       }}
-                      className="flex-1 py-2 rounded-lg border border-accent-emerald/30 bg-accent-emerald/10 text-accent-emerald hover:bg-accent-emerald/20 text-center"
+                      className="flex-1 py-2 rounded-lg border border-accent-emerald/30 bg-accent-emerald/10 text-accent-emerald hover:bg-accent-emerald/20 text-center cursor-pointer transition-colors"
                     >
                       Easy (14d)
                     </button>
@@ -1041,7 +1248,7 @@ export default function LearnabilityLandingAndStudio() {
             <button
               onClick={handleQuickScholarPass}
               disabled={isGeneratingPass}
-              className="px-6 py-3 rounded-lg bg-accent-cyan text-slate-950 font-bold hover:bg-accent-cyan/90 transition-all flex items-center gap-2 shadow-lg shadow-cyan-500/20"
+              className="px-6 py-3 rounded-lg bg-accent-cyan text-slate-950 font-bold hover:bg-accent-cyan/90 transition-all flex items-center gap-2 shadow-lg shadow-cyan-500/20 cursor-pointer"
             >
               <span>{isGeneratingPass ? 'Entering Studio...' : 'Launch Scholar Workspace'}</span>
               <ArrowRight className="w-4 h-4" />
@@ -1049,7 +1256,7 @@ export default function LearnabilityLandingAndStudio() {
 
             <button
               onClick={() => setIsIngestOpen(true)}
-              className="px-6 py-3 rounded-lg border border-rule-border bg-surface-elevated hover:bg-canvas text-ink-primary font-semibold transition-all flex items-center gap-2"
+              className="px-6 py-3 rounded-lg border border-rule-border bg-surface-elevated hover:bg-canvas text-ink-primary font-semibold transition-all flex items-center gap-2 cursor-pointer shadow-sm"
             >
               <Upload className="w-4 h-4 text-accent-cyan" />
               <span>Ingest Document</span>
@@ -1070,7 +1277,7 @@ export default function LearnabilityLandingAndStudio() {
               </h3>
               <button
                 onClick={() => setIsIngestOpen(false)}
-                className="text-ink-muted hover:text-ink-primary"
+                className="text-ink-muted hover:text-ink-primary cursor-pointer"
               >
                 <X className="w-4 h-4" />
               </button>
@@ -1080,7 +1287,7 @@ export default function LearnabilityLandingAndStudio() {
               <button
                 type="button"
                 onClick={() => setIngestType('pdf')}
-                className={`flex-1 py-1 rounded ${
+                className={`flex-1 py-1 rounded cursor-pointer transition-colors ${
                   ingestType === 'pdf' ? 'bg-canvas text-accent-cyan font-medium' : 'text-ink-muted'
                 }`}
               >
@@ -1089,7 +1296,7 @@ export default function LearnabilityLandingAndStudio() {
               <button
                 type="button"
                 onClick={() => setIngestType('arxiv')}
-                className={`flex-1 py-1 rounded ${
+                className={`flex-1 py-1 rounded cursor-pointer transition-colors ${
                   ingestType === 'arxiv' ? 'bg-canvas text-accent-cyan font-medium' : 'text-ink-muted'
                 }`}
               >
@@ -1098,7 +1305,7 @@ export default function LearnabilityLandingAndStudio() {
               <button
                 type="button"
                 onClick={() => setIngestType('youtube')}
-                className={`flex-1 py-1 rounded ${
+                className={`flex-1 py-1 rounded cursor-pointer transition-colors ${
                   ingestType === 'youtube' ? 'bg-canvas text-accent-cyan font-medium' : 'text-ink-muted'
                 }`}
               >
@@ -1107,7 +1314,7 @@ export default function LearnabilityLandingAndStudio() {
               <button
                 type="button"
                 onClick={() => setIngestType('topic')}
-                className={`flex-1 py-1 rounded ${
+                className={`flex-1 py-1 rounded cursor-pointer transition-colors ${
                   ingestType === 'topic' ? 'bg-canvas text-accent-cyan font-medium' : 'text-ink-muted'
                 }`}
               >
@@ -1117,53 +1324,42 @@ export default function LearnabilityLandingAndStudio() {
 
             <form onSubmit={handleIngestSubmit} className="space-y-4">
               {ingestType === 'pdf' && (
-                <div className="border border-dashed border-rule-border rounded-lg p-6 text-center hover:border-accent-cyan cursor-pointer transition-colors bg-canvas">
-                  <Upload className="w-6 h-6 text-accent-cyan mx-auto mb-2" />
-                  <div className="text-xs text-ink-primary font-medium mb-1">
-                    Drag and drop research PDF
+                <div className="border border-dashed border-rule-border hover:border-accent-cyan rounded-lg p-6 text-center text-xs font-mono text-ink-muted cursor-pointer transition-colors">
+                  <Upload className="w-6 h-6 mx-auto mb-2 text-accent-cyan" />
+                  <p>Drop PDF paper here or click to select</p>
+                  <p className="text-[10px] text-ink-subtle mt-1">Supports mathematical OCR & 1536-dim vector indexing</p>
+                </div>
+              )}
+
+              <input
+                type="text"
+                value={ingestInput}
+                onChange={(e) => setIngestInput(e.target.value)}
+                placeholder={
+                  ingestType === 'arxiv'
+                    ? 'e.g. 2501.12948 or arXiv URL'
+                    : ingestType === 'youtube'
+                    ? 'e.g. https://www.youtube.com/watch?v=...'
+                    : 'Study title or subject...'
+                }
+                className="w-full bg-canvas border border-rule-border rounded-md px-3 py-2 text-xs font-mono text-ink-primary focus:outline-none focus:border-accent-cyan"
+              />
+
+              {/* 4-Phase Indexing Telemetry */}
+              {isIngesting && (
+                <div className="space-y-1.5 font-mono text-[11px] py-1">
+                  <div className={`p-2 rounded border transition-all ${ingestStep >= 1 ? 'border-accent-cyan text-accent-cyan bg-accent-cyan/10' : 'border-rule-border text-ink-muted'}`}>
+                    1. Text Tokenization & OCR Verification
                   </div>
-                  <div className="text-[11px] text-ink-muted font-mono">
-                    1536-dim vector embeddings automatically generated
+                  <div className={`p-2 rounded border transition-all ${ingestStep >= 2 ? 'border-accent-cyan text-accent-cyan bg-accent-cyan/10' : 'border-rule-border text-ink-muted'}`}>
+                    2. Semantic Chunking & Equation Extraction
                   </div>
-                </div>
-              )}
-
-              {ingestType === 'arxiv' && (
-                <div>
-                  <label className="block text-xs font-mono text-ink-muted mb-1">arXiv DOI or URL</label>
-                  <input
-                    type="text"
-                    value={ingestInput}
-                    onChange={(e) => setIngestInput(e.target.value)}
-                    placeholder="e.g. 2501.12948"
-                    className="w-full bg-canvas border border-rule-border rounded-md px-3 py-2 text-xs text-ink-primary font-mono focus:outline-none focus:border-accent-cyan"
-                  />
-                </div>
-              )}
-
-              {ingestType === 'youtube' && (
-                <div>
-                  <label className="block text-xs font-mono text-ink-muted mb-1">Lecture Video URL</label>
-                  <input
-                    type="text"
-                    value={ingestInput}
-                    onChange={(e) => setIngestInput(e.target.value)}
-                    placeholder="e.g. https://www.youtube.com/watch?v=..."
-                    className="w-full bg-canvas border border-rule-border rounded-md px-3 py-2 text-xs text-ink-primary font-mono focus:outline-none focus:border-accent-cyan"
-                  />
-                </div>
-              )}
-
-              {ingestType === 'topic' && (
-                <div>
-                  <label className="block text-xs font-mono text-ink-muted mb-1">Curated Study Topic</label>
-                  <input
-                    type="text"
-                    value={ingestInput}
-                    onChange={(e) => setIngestInput(e.target.value)}
-                    placeholder="e.g. Quantum Error Correction or RLHF"
-                    className="w-full bg-canvas border border-rule-border rounded-md px-3 py-2 text-xs text-ink-primary font-mono focus:outline-none focus:border-accent-cyan"
-                  />
+                  <div className={`p-2 rounded border transition-all ${ingestStep >= 3 ? 'border-accent-cyan text-accent-cyan bg-accent-cyan/10' : 'border-rule-border text-ink-muted'}`}>
+                    3. Vector Embedding (1536-dim)
+                  </div>
+                  <div className={`p-2 rounded border transition-all ${ingestStep >= 4 ? 'border-accent-emerald text-accent-emerald bg-accent-emerald/10' : 'border-rule-border text-ink-muted'}`}>
+                    4. Study Sanctuary Ready
+                  </div>
                 </div>
               )}
 
@@ -1171,99 +1367,19 @@ export default function LearnabilityLandingAndStudio() {
                 <button
                   type="button"
                   onClick={() => setIsIngestOpen(false)}
-                  className="px-3 py-1.5 text-xs font-mono rounded-md border border-rule-border text-ink-muted hover:text-ink-primary"
+                  className="px-3 py-1.5 text-xs font-mono rounded-md border border-rule-border hover:bg-surface-elevated text-ink-muted cursor-pointer"
                 >
                   Cancel
                 </button>
                 <button
                   type="submit"
                   disabled={isIngesting}
-                  className="px-4 py-1.5 text-xs font-mono rounded-md bg-accent-cyan text-slate-950 font-semibold hover:bg-accent-cyan/90"
+                  className="px-4 py-1.5 text-xs font-mono rounded-md bg-accent-cyan text-slate-950 font-semibold hover:bg-accent-cyan/90 cursor-pointer disabled:opacity-50"
                 >
                   {isIngesting ? 'Indexing Embeddings...' : 'Index & Open Studio'}
                 </button>
               </div>
             </form>
-          </div>
-        </div>
-      )}
-
-      {/* ========================================================= */}
-      {/* COMMAND PALETTE MODAL (Cmd+K)                             */}
-      {/* ========================================================= */}
-      {isCommandOpen && (
-        <div className="fixed inset-0 z-50 bg-black/60 backdrop-blur-sm flex items-start justify-center pt-20 p-4">
-          <div className="bg-surface border border-rule-border rounded-xl max-w-lg w-full shadow-2xl overflow-hidden font-mono text-xs">
-            <div className="flex items-center gap-2 px-4 py-3 border-b border-rule-border">
-              <Search className="w-4 h-4 text-accent-cyan" />
-              <input
-                type="text"
-                autoFocus
-                placeholder="Jump to section, formula, or tool..."
-                className="flex-1 bg-transparent text-ink-primary focus:outline-none placeholder:text-ink-subtle"
-              />
-              <kbd className="px-1.5 py-0.5 rounded bg-surface-elevated border border-rule-border text-[10px] text-ink-muted">
-                ESC
-              </kbd>
-            </div>
-
-            <div className="p-2 space-y-1">
-              <button
-                onClick={() => {
-                  setActiveMode('read');
-                  setIsCommandOpen(false);
-                }}
-                className="w-full text-left px-3 py-2 rounded-md hover:bg-surface-elevated flex items-center justify-between text-ink-muted hover:text-ink-primary"
-              >
-                <div className="flex items-center gap-2">
-                  <BookOpen className="w-3.5 h-3.5 text-accent-cyan" />
-                  <span>1. Focus Read Mode</span>
-                </div>
-                <span className="text-[10px] text-ink-subtle">Mode</span>
-              </button>
-
-              <button
-                onClick={() => {
-                  setActiveMode('interrogate');
-                  setIsCommandOpen(false);
-                }}
-                className="w-full text-left px-3 py-2 rounded-md hover:bg-surface-elevated flex items-center justify-between text-ink-muted hover:text-ink-primary"
-              >
-                <div className="flex items-center gap-2">
-                  <MessageSquare className="w-3.5 h-3.5 text-accent-cyan" />
-                  <span>2. Socratic Interrogation</span>
-                </div>
-                <span className="text-[10px] text-ink-subtle">Mode</span>
-              </button>
-
-              <button
-                onClick={() => {
-                  setActiveMode('diagram');
-                  setIsCommandOpen(false);
-                }}
-                className="w-full text-left px-3 py-2 rounded-md hover:bg-surface-elevated flex items-center justify-between text-ink-muted hover:text-ink-primary"
-              >
-                <div className="flex items-center gap-2">
-                  <Network className="w-3.5 h-3.5 text-accent-cyan" />
-                  <span>3. Mermaid Concept Tree</span>
-                </div>
-                <span className="text-[10px] text-ink-subtle">Mode</span>
-              </button>
-
-              <button
-                onClick={() => {
-                  setActiveMode('recall');
-                  setIsCommandOpen(false);
-                }}
-                className="w-full text-left px-3 py-2 rounded-md hover:bg-surface-elevated flex items-center justify-between text-ink-muted hover:text-ink-primary"
-              >
-                <div className="flex items-center gap-2">
-                  <RotateCcw className="w-3.5 h-3.5 text-accent-cyan" />
-                  <span>4. Leitner Active Recall Flashcards</span>
-                </div>
-                <span className="text-[10px] text-ink-subtle">Mode</span>
-              </button>
-            </div>
           </div>
         </div>
       )}

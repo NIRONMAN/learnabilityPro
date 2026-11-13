@@ -40,9 +40,17 @@ export function SanctuaryHeader({ onOpenCommandPalette }: { onOpenCommandPalette
           {/* Active Document Breadcrumb */}
           <div className="hidden md:flex items-center gap-2 font-mono text-ink-muted">
             <span className="truncate max-w-[200px] text-ink-primary font-medium">
-              vaswani-2017.pdf
+              {pathname.startsWith('/learn')
+                ? 'socratic-tutor.ai'
+                : pathname.startsWith('/flashcard')
+                ? 'leitner-recall.deck'
+                : pathname.startsWith('/diagram')
+                ? 'concept-hierarchy.dag'
+                : pathname.startsWith('/dashboard')
+                ? 'scholar-sanctuaries'
+                : 'vaswani-2017.pdf'}
             </span>
-            <span className="px-1.5 py-0.2 rounded text-[10px] bg-accent-emerald/10 text-accent-emerald border border-accent-emerald/20 flex items-center gap-1">
+            <span className="px-1.5 py-0.2 rounded text-[10px] bg-accent-emerald/10 text-accent-emerald border border-accent-emerald/20 flex items-center gap-1 font-semibold">
               <span className="w-1.5 h-1.5 rounded-full bg-accent-emerald"></span>
               98.4% Grounded
             </span>
