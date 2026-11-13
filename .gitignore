@@ -36,3 +36,9 @@ Thumbs.db
 # Antigravity / Gemini agent state
 .agents/
 .gemini/
+
+# TypeScript build cache
+*.tsbuildinfo
+
+# Agent state
+.agent/

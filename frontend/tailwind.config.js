@@ -9,6 +9,33 @@ module.exports = {
   theme: {
     extend: {
       colors: {
+        canvas: "var(--canvas)",
+        surface: "var(--surface)",
+        "surface-elevated": "var(--surface-elevated)",
+        "surface-muted": "var(--surface-muted)",
+        ink: {
+          primary: "var(--ink-primary)",
+          body: "var(--ink-body)",
+          muted: "var(--ink-muted)",
+          subtle: "var(--ink-subtle)",
+        },
+        rule: {
+          border: "var(--rule-border)",
+          subtle: "var(--rule-subtle)",
+          strong: "var(--rule-strong)",
+        },
+        accent: {
+          cyan: "var(--accent-cyan)",
+          indigo: "var(--accent-indigo)",
+          emerald: "var(--accent-emerald)",
+          amber: "var(--accent-amber)",
+          seal: "var(--accent-seal)",
+        },
+        wash: {
+          highlight: "var(--wash-highlight)",
+          hover: "var(--wash-hover)",
+        },
+        // Backwards compatibility bindings
         border: "hsl(var(--border))",
         input: "hsl(var(--input))",
         ring: "hsl(var(--ring))",
@@ -30,18 +57,32 @@ module.exports = {
           DEFAULT: "hsl(var(--muted))",
           foreground: "hsl(var(--muted-foreground))",
         },
-        accent: {
-          DEFAULT: "hsl(var(--accent))",
-          foreground: "hsl(var(--accent-foreground))",
-        },
-        popover: {
-          DEFAULT: "hsl(var(--popover))",
-          foreground: "hsl(var(--popover-foreground))",
-        },
         card: {
           DEFAULT: "hsl(var(--card))",
           foreground: "hsl(var(--card-foreground))",
         },
+      },
+      fontFamily: {
+        sans: [
+          "ui-sans-serif",
+          "system-ui",
+          "-apple-system",
+          "BlinkMacSystemFont",
+          "Segoe UI",
+          "Roboto",
+          "Helvetica Neue",
+          "Arial",
+          "sans-serif",
+        ],
+        mono: [
+          "ui-monospace",
+          "SFMono-Regular",
+          "Menlo",
+          "Monaco",
+          "Consolas",
+          "Liberation Mono",
+          "monospace",
+        ],
       },
       borderRadius: {
         lg: "var(--radius)",

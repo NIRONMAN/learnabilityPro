@@ -1,0 +1,15 @@
+{
+  "$schema": "https://t3.codes/schema/t3.json",
+  "scripts": [
+    {
+      "name": "Dev (Split Terminal)",
+      "command": "./run-tmux.sh",
+      "icon": "play"
+    },
+    {
+      "name": "Dev (Unified)",
+      "command": "./run.sh",
+      "icon": "play"
+    }
+  ]
+}

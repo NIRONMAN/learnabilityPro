@@ -4,68 +4,174 @@
 
 @layer base {
   :root {
-    --background: 220 20% 98%;
-    --foreground: 224 71% 4%;
+    /* Blueprint Studio (Day Canvas) */
+    --canvas: #F8FAFC;
+    --surface: #FFFFFF;
+    --surface-elevated: #F1F5F9;
+    --surface-muted: #E2E8F0;
+    --ink-primary: #0F172A;
+    --ink-body: #334155;
+    --ink-muted: #64748B;
+    --ink-subtle: #94A3B8;
+    --rule-border: #E2E8F0;
+    --rule-subtle: #F1F5F9;
+    --rule-strong: #CBD5E1;
+    --accent-cyan: #0284C7;
+    --accent-indigo: #4F46E5;
+    --accent-emerald: #059669;
+    --accent-amber: #D97706;
+    --accent-seal: #DC2626;
+    --wash-highlight: rgba(2, 132, 199, 0.08);
+    --wash-hover: rgba(226, 232, 240, 0.6);
+    
+    /* Standard Shadcn / Tailwind bindings */
+    --background: 210 40% 98%;
+    --foreground: 222 47% 11%;
     --card: 0 0% 100%;
-    --card-foreground: 224 71% 4%;
+    --card-foreground: 222 47% 11%;
     --popover: 0 0% 100%;
-    --popover-foreground: 224 71% 4%;
-    --primary: 243 75% 59%;
-    --primary-foreground: 210 20% 98%;
-    --secondary: 220 14% 96%;
-    --secondary-foreground: 220.9 39.3% 11%;
-    --muted: 220 14% 96%;
-    --muted-foreground: 220 9% 46%;
-    --accent: 243 75% 96%;
-    --accent-foreground: 243 75% 59%;
-    --destructive: 0 84.2% 60.2%;
-    --destructive-foreground: 210 20% 98%;
-    --border: 220 13% 91%;
-    --input: 220 13% 91%;
-    --ring: 243 75% 59%;
-    --radius: 0.75rem;
+    --popover-foreground: 222 47% 11%;
+    --primary: 199 89% 48%;
+    --primary-foreground: 210 40% 98%;
+    --secondary: 210 40% 96%;
+    --secondary-foreground: 222 47% 11%;
+    --muted: 210 40% 96%;
+    --muted-foreground: 215 16% 47%;
+    --accent: 238 82% 59%;
+    --accent-foreground: 210 40% 98%;
+    --destructive: 0 84% 60%;
+    --destructive-foreground: 210 40% 98%;
+    --border: 214 32% 91%;
+    --input: 214 32% 91%;
+    --ring: 199 89% 48%;
+    --radius: 0.625rem;
   }
 
   .dark {
-    --background: 224 71% 4%;
-    --foreground: 210 20% 98%;
-    --card: 224 71% 6%;
-    --card-foreground: 210 20% 98%;
-    --popover: 224 71% 6%;
-    --popover-foreground: 210 20% 98%;
-    --primary: 243 75% 65%;
-    --primary-foreground: 210 20% 98%;
-    --secondary: 215 28% 17%;
-    --secondary-foreground: 210 20% 98%;
-    --muted: 215 28% 17%;
-    --muted-foreground: 217.9 10.6% 64.9%;
-    --accent: 243 75% 15%;
-    --accent-foreground: 243 75% 65%;
-    --destructive: 0 62.8% 30.6%;
-    --destructive-foreground: 210 20% 98%;
-    --border: 215 28% 17%;
-    --input: 215 28% 17%;
-    --ring: 243 75% 65%;
+    /* Cybernetic Obsidian (Default Focus Canvas) */
+    --canvas: #0A0D14;
+    --surface: #111622;
+    --surface-elevated: #182032;
+    --surface-muted: #1E293B;
+    --ink-primary: #F8FAFC;
+    --ink-body: #CBD5E1;
+    --ink-muted: #94A3B8;
+    --ink-subtle: #64748B;
+    --rule-border: #1E293B;
+    --rule-subtle: #141A28;
+    --rule-strong: #334155;
+    --accent-cyan: #38BDF8;
+    --accent-indigo: #818CF8;
+    --accent-emerald: #34D399;
+    --accent-amber: #FBBF24;
+    --accent-seal: #F87171;
+    --wash-highlight: rgba(56, 189, 248, 0.12);
+    --wash-hover: rgba(30, 41, 59, 0.7);
+
+    /* Standard bindings in dark */
+    --background: 222 47% 6%;
+    --foreground: 210 40% 98%;
+    --card: 222 47% 8%;
+    --card-foreground: 210 40% 98%;
+    --popover: 222 47% 8%;
+    --popover-foreground: 210 40% 98%;
+    --primary: 199 89% 48%;
+    --primary-foreground: 222 47% 6%;
+    --secondary: 217 33% 17%;
+    --secondary-foreground: 210 40% 98%;
+    --muted: 217 33% 17%;
+    --muted-foreground: 215 20% 65%;
+    --accent: 238 82% 59%;
+    --accent-foreground: 210 40% 98%;
+    --destructive: 0 63% 31%;
+    --destructive-foreground: 210 40% 98%;
+    --border: 217 33% 17%;
+    --input: 217 33% 17%;
+    --ring: 199 89% 48%;
   }
 }
 
+/* Base Body Styles */
 body {
-  color: hsl(var(--foreground));
-  background: hsl(var(--background));
-  font-feature-settings: "rlig" 1, "calt" 1;
+  color: var(--ink-body);
+  background-color: var(--canvas);
+  font-feature-settings: "cv02", "cv03", "cv04", "cv11";
+  text-rendering: optimizeLegibility;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  transition: background-color 0.2s ease, color 0.2s ease;
 }
 
-/* 3D Flashcard Flip utilities */
+/* Dot Grid Background for Cognitive Canvas */
+.canvas-dot-grid {
+  background-image: radial-gradient(circle, rgba(148, 163, 184, 0.14) 1px, transparent 1px);
+  background-size: 24px 24px;
+}
+
+.dark .canvas-dot-grid {
+  background-image: radial-gradient(circle, rgba(56, 189, 248, 0.12) 1px, transparent 1px);
+  background-size: 24px 24px;
+}
+
+/* Custom Text Selection */
+::selection {
+  background-color: var(--wash-highlight);
+  color: var(--ink-primary);
+}
+
+/* Custom Precision Scrollbar */
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+::-webkit-scrollbar-thumb {
+  background-color: var(--rule-border);
+  border-radius: 9999px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background-color: var(--ink-subtle);
+}
+
+/* 3D Flip Card Utilities */
 .perspective-1000 {
   perspective: 1000px;
 }
-.transform-style-3d {
+
+.preserve-3d {
   transform-style: preserve-3d;
 }
+
 .backface-hidden {
   backface-visibility: hidden;
   -webkit-backface-visibility: hidden;
 }
+
 .rotate-y-180 {
   transform: rotateY(180deg);
+}
+
+/* Glassmorphic Dock Polish */
+.glass-dock {
+  background-color: rgba(17, 22, 34, 0.85);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  border: 1px solid var(--rule-border);
+}
+
+:root:not(.dark) .glass-dock {
+  background-color: rgba(255, 255, 255, 0.85);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  border: 1px solid var(--rule-border);
+}
+
+/* Caret styling */
+input, textarea {
+  caret-color: var(--accent-cyan);
 }
