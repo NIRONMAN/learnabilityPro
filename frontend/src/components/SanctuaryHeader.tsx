@@ -3,7 +3,7 @@
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import { useTheme } from './ThemeProvider';
-import { Sun, Moon, Terminal, Search, Layers, BookOpen, UserCheck, ArrowRight, Activity, Command } from 'lucide-react';
+import { Sun, Moon, Sparkles, Terminal, Search, Layers, BookOpen, UserCheck, ArrowRight, Activity, Command } from 'lucide-react';
 import { authStorage } from '@/lib/api';
 import { useState, useEffect } from 'react';
 
@@ -68,21 +68,34 @@ export function SanctuaryHeader({ onOpenCommandPalette }: { onOpenCommandPalette
           <button
             onClick={toggleTheme}
             type="button"
-            title={theme === 'obsidian' ? 'Switch to Day Slate' : 'Switch to Obsidian Slate'}
-            className="p-1.5 rounded-md border border-rule-border bg-surface-elevated text-ink-muted hover:text-ink-primary hover:border-rule-strong transition-all text-xs"
+            title={`Current: ${theme.toUpperCase()} · Click to cycle atmospheres`}
+            className="px-2.5 py-1.5 rounded-md border border-rule-border bg-surface-elevated text-ink-muted hover:text-ink-primary hover:border-rule-strong transition-all text-xs flex items-center gap-1.5 font-mono"
             aria-label="Toggle Studio Atmosphere"
           >
-            {theme === 'obsidian' ? (
-              <Moon className="w-3.5 h-3.5 text-accent-cyan" />
-            ) : (
-              <Sun className="w-3.5 h-3.5 text-accent-amber" />
+            {theme === 'obsidian' && (
+              <>
+                <Moon className="w-3.5 h-3.5 text-accent-cyan" />
+                <span className="text-[11px] hidden sm:inline text-accent-cyan font-medium">Obsidian</span>
+              </>
+            )}
+            {theme === 'aurora' && (
+              <>
+                <Sparkles className="w-3.5 h-3.5 text-accent-violet" />
+                <span className="text-[11px] hidden sm:inline text-accent-violet font-medium">Aurora</span>
+              </>
+            )}
+            {theme === 'blueprint' && (
+              <>
+                <Sun className="w-3.5 h-3.5 text-accent-amber" />
+                <span className="text-[11px] hidden sm:inline text-accent-amber font-medium">Blueprint</span>
+              </>
             )}
           </button>
 
           {/* Direct Workspace Access */}
           <Link
             href="/dashboard"
-            className="px-3 py-1.5 rounded-md text-xs font-semibold font-mono bg-accent-cyan text-white hover:bg-accent-cyan/90 transition-all flex items-center gap-1.5 shadow-sm shadow-cyan-500/20"
+            className="px-3.5 py-1.5 rounded-md text-xs font-semibold font-mono bg-gradient-to-r from-accent-cyan via-accent-indigo to-accent-violet text-white hover:opacity-95 transition-all flex items-center gap-1.5 shadow-sm shadow-indigo-500/20"
           >
             {hasToken ? (
               <>

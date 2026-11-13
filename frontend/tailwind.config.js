@@ -27,9 +27,13 @@ module.exports = {
         accent: {
           cyan: "var(--accent-cyan)",
           indigo: "var(--accent-indigo)",
+          violet: "var(--accent-violet)",
           emerald: "var(--accent-emerald)",
           amber: "var(--accent-amber)",
+          rose: "var(--accent-rose)",
           seal: "var(--accent-seal)",
+          teal: "var(--accent-teal)",
+          fuchsia: "var(--accent-fuchsia)",
         },
         wash: {
           highlight: "var(--wash-highlight)",

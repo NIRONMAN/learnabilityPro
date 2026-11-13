@@ -11,43 +11,47 @@ Academic Research Studio
 ## Aesthetic Core
 A disciplined, high-density academic research workbench engineered for rigorous multi-hour study and scientific synthesis. Inspired by IDEs (VS Code, Linear, Raycast) and scientific research suites (Obsidian, Overleaf), it trades empty marketing fluff for high information density, multi-pane collapsible studios, persistent document hierarchies, split-screen reading/interrogation workbenches, and keyboard-first command palettes (`Cmd+K`).
 
-## Color Palette
+## Color Palette & Multi-Spectral Cognitive Systems
 
-### Obsidian Research Slate (Default Focus Studio)
-- `--bg-canvas`: `#090D16` (deep obsidian workbench backdrop)
-- `--bg-surface`: `#0F172A` (elevated studio pane surface)
-- `--bg-surface-elevated`: `#1E293B` (high-contrast active tab & docked panel)
-- `--bg-muted`: `#172033` (subtle panel header & inset area)
-- `--fg-primary`: `#F8FAFC` (pure diamond white)
-- `--fg-body`: `#CBD5E1` (comfortable reading slate)
-- `--fg-muted`: `#94A3B8` (precise coordinates, timestamps & annotations)
-- `--border-subtle`: `#1E293B` (hairline pane separator)
-- `--border-strong`: `#334155` (focused panel border & active split line)
-- `--border-focus`: `#38BDF8` (electric cyan precision focus ring)
-- `--accent-cyan`: `#0EA5E9` (terminal telemetry & active selection)
-- `--accent-indigo`: `#6366F1` (synthesis & Socratic prompt accent)
-- `--accent-emerald`: `#10B981` (verified provenance grounding)
-- `--accent-amber`: `#F59E0B` (active recall alert & formula variable)
-- `--accent-seal`: `#EF4444` (retrieval error & low confidence mark)
-- `--highlight-wash`: `rgba(14, 165, 233, 0.14)` (active line & passage wash)
+The studio departs from monotone grey/cyan by assigning unambiguous semantic identity to each color channel across all atmospheres:
 
-### Day Academic Slate (Daytime Studio)
-- `--bg-canvas`: `#F1F5F9` (drafting slate backdrop)
-- `--bg-surface`: `#FFFFFF` (crisp white workbench pane)
-- `--bg-surface-elevated`: `#F8FAFC` (elevated control panel)
-- `--bg-muted`: `#E2E8F0` (pane header & gutter background)
-- `--fg-primary`: `#0F172A` (deep carbon ink)
-- `--fg-body`: `#334155` (academic reading slate)
-- `--fg-muted`: `#64748B` (technical metadata & line numbers)
-- `--border-subtle`: `#E2E8F0` (pane divider)
-- `--border-strong`: `#CBD5E1` (active pane border)
-- `--border-focus`: `#0284C7` (deep cyan focus indicator)
-- `--accent-cyan`: `#0284C7` (primary action & telemetry)
-- `--accent-indigo`: `#4F46E5` (conceptual query accent)
-- `--accent-emerald`: `#059669` (grounded provenance mark)
-- `--accent-amber`: `#D97706` (warning/recall amber)
-- `--accent-seal`: `#DC2626` (alert crimson)
-- `--highlight-wash`: `rgba(2, 132, 199, 0.08)` (subtle text highlight)
+- `--accent-cyan`: `#38BDF8` (Precision system telemetry, active selection, key indexing `K`, query tokens)
+- `--accent-indigo`: `#818CF8` (Query tensor `Q`, structural linear projections, root architecture)
+- `--accent-violet`: `#C084FC` (Attention logits, multi-head tensor transformations, arXiv papers)
+- `--accent-emerald`: `#34D399` (Ground-truth provenance, verified proof anchors, high-retention recall)
+- `--accent-amber`: `#FBBF24` (Variance normalization scale `√d_k`, active recall intervals, lecture video sync)
+- `--accent-rose`: `#FB7185` (Value payload `V`, O(1) complexity bounds, bottleneck flags, PDF documents)
+- `--accent-teal`: `#2DD4BF` (Relational tensor attention Head 7, direct object bindings)
+- `--accent-fuchsia`: `#F472B6` (Action transduction Head 8, cross-attention mappings)
+
+### Atmosphere Modes:
+1. **Obsidian Research Slate (`obsidian`)**: Deep obsidian canvas (`#0A0D14`), slate panes (`#111622`), elevated workbenches (`#182032`) with crisp multi-spectral neon telemetry.
+2. **Midnight Aurora (`aurora`)**: Cosmic deep navy backdrop (`#060913`), elevated studio panels (`#131C31`), glowing violet-indigo radiance and high-saturation mathematical accents.
+3. **Day Academic Blueprint (`blueprint`)**: Drafting slate backdrop (`#F8FAFC`), crisp white research surface (`#FFFFFF`), high-contrast ink (`#0F172A`) and warm amber/cyan academic highlighters.
+
+## Distinct Interactive Elements Added
+
+1. **Interactive Transformer Attention Heatmap Matrix (Tab 1)**:
+   - 8 individual Attention Heads, each rendered in its distinct signature hue (Cyan, Indigo, Violet, Emerald, Amber, Rose, Teal, Fuchsia).
+   - Real-time sentence query-to-key attention weight heat bars across the classic Winograd coreference sentence (*"The animal didn't cross the street because it was too tired"*).
+   - Interactive token clicking dynamically reveals the learned subspace specialization.
+
+2. **Color-Coded Equation Inspector**:
+   - Equation (1) `Attention(Q, K, V) = softmax((QK^T)/√d_k)V` broken down into interactive variable chips.
+   - Clicking `Q`, `K`, `V`, `softmax`, or `√d_k` surfaces dimension cards (`[Batch, Seq, 64]`) and mathematical explanations.
+
+3. **Multi-Modal Research Ingestion Desk**:
+   - Tabbed source ingestion for PDF Research Papers, arXiv DOIs, and YouTube Video Lectures.
+   - Animated 4-phase indexing pipeline (Tokenization → Semantic Chunking → 1536-dim Embedding → Studio Ready).
+
+4. **Stanford CS229 Synchronized Video Clip Player Pill**:
+   - Interactive audio commentary playback simulation with timecode scrub [04:12 / 54:00].
+
+5. **Concept Dependency Knowledge Graph (Tab 4)**:
+   - Visual DAG network showing architectural prerequisites and grounded comprehension states.
+
+6. **Leitner Active Recall Spaced Repetition Deck (Tab 3)**:
+   - 3D interactive flip card with 4-box Leitner intervals and color-coded difficulty scheduling.
 
 ## Typography
 

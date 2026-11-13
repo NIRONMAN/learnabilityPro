@@ -2,7 +2,7 @@
 
 import React, { createContext, useContext, useEffect, useState } from 'react';
 
-type Theme = 'blueprint' | 'obsidian';
+type Theme = 'obsidian' | 'aurora' | 'blueprint';
 
 interface ThemeContextType {
   theme: Theme;
@@ -19,34 +19,38 @@ const ThemeContext = createContext<ThemeContextType>({
 export function ThemeProvider({ children }: { children: React.ReactNode }) {
   const [theme, setThemeState] = useState<Theme>('obsidian');
 
+  const applyThemeClasses = (t: Theme) => {
+    if (t === 'obsidian') {
+      document.documentElement.classList.add('dark');
+      document.documentElement.classList.remove('theme-aurora');
+    } else if (t === 'aurora') {
+      document.documentElement.classList.add('dark', 'theme-aurora');
+    } else {
+      document.documentElement.classList.remove('dark', 'theme-aurora');
+    }
+  };
+
   useEffect(() => {
     const saved = localStorage.getItem('lp_theme') as Theme | null;
-    if (saved === 'obsidian' || saved === 'blueprint') {
+    if (saved === 'obsidian' || saved === 'aurora' || saved === 'blueprint') {
       setThemeState(saved);
-      if (saved === 'obsidian') {
-        document.documentElement.classList.add('dark');
-      } else {
-        document.documentElement.classList.remove('dark');
-      }
+      applyThemeClasses(saved);
     } else {
-      // Default is Obsidian (cybernetic canvas)
       setThemeState('obsidian');
-      document.documentElement.classList.add('dark');
+      applyThemeClasses('obsidian');
     }
   }, []);
 
   const setTheme = (newTheme: Theme) => {
     setThemeState(newTheme);
     localStorage.setItem('lp_theme', newTheme);
-    if (newTheme === 'obsidian') {
-      document.documentElement.classList.add('dark');
-    } else {
-      document.documentElement.classList.remove('dark');
-    }
+    applyThemeClasses(newTheme);
   };
 
   const toggleTheme = () => {
-    setTheme(theme === 'obsidian' ? 'blueprint' : 'obsidian');
+    const nextTheme: Theme =
+      theme === 'obsidian' ? 'aurora' : theme === 'aurora' ? 'blueprint' : 'obsidian';
+    setTheme(nextTheme);
   };
 
   return (
