@@ -1,10 +1,9 @@
 'use client';
 
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
-import { api, authStorage } from '@/lib/api';
-import { SanctuaryHeader } from '@/components/SanctuaryHeader';
+import { authStorage } from '@/lib/api';
 import {
   BookOpen,
   MessageSquare,
@@ -14,7 +13,7 @@ import {
   Search,
   ExternalLink,
   ChevronRight,
-  ChevronLeft,
+  ChevronDown,
   CheckCircle2,
   ShieldCheck,
   ArrowRight,
@@ -32,10 +31,16 @@ import {
   Share2,
   Compass,
   Cpu,
-  Brain
+  Brain,
+  Video,
+  GitBranch,
+  ArrowDown,
+  Layers3,
+  Network,
+  GraduationCap
 } from 'lucide-react';
 
-type StudyMode = 'read' | 'interrogate' | 'recall';
+type StudyMode = 'read' | 'interrogate' | 'diagram' | 'recall';
 
 interface DocMeta {
   id: string;
@@ -90,7 +95,7 @@ const FLASHCARD_DECK: Flashcard[] = [
   {
     id: 'fc-1',
     question: 'Why does Scaled Dot-Product Attention divide logits by √d_k?',
-    answer: 'For large values of d_k, the dot products grow large in magnitude, pushing the softmax function into regions with extremely small gradients. Dividing by √d_k counteracts this variance scaling and stabilizes backpropagation.',
+    answer: 'For large values of d_k, dot products grow large in magnitude, pushing softmax into regions with extremely small gradients. Dividing by √d_k counteracts this variance scaling and stabilizes backpropagation.',
     citation: '§3.2.1 Scaled Dot-Product Attention (p. 4)',
     interval: '3 days',
     box: 2
@@ -123,13 +128,12 @@ interface ChatMessage {
   };
 }
 
-export default function ZenStudyStudioPage() {
+export default function LearnabilityLandingAndStudio() {
   const router = useRouter();
 
-  // Active state
+  // Active studio state
   const [activeDocKey, setActiveDocKey] = useState<string>('vaswani');
   const [activeMode, setActiveMode] = useState<StudyMode>('read');
-  const [activeSectionId, setActiveSectionId] = useState<string>('sec-3-2');
 
   // Text selection popover state
   const [selectionPopover, setSelectionPopover] = useState<{
@@ -141,7 +145,7 @@ export default function ZenStudyStudioPage() {
   // Command palette & Ingestion modals
   const [isCommandOpen, setIsCommandOpen] = useState(false);
   const [isIngestOpen, setIsIngestOpen] = useState(false);
-  const [ingestType, setIngestType] = useState<'pdf' | 'arxiv' | 'youtube'>('pdf');
+  const [ingestType, setIngestType] = useState<'pdf' | 'arxiv' | 'youtube' | 'topic'>('pdf');
   const [ingestInput, setIngestInput] = useState('');
   const [isIngesting, setIsIngesting] = useState(false);
 
@@ -165,13 +169,16 @@ export default function ZenStudyStudioPage() {
   const [isFlipped, setIsFlipped] = useState(false);
   const [reviewedCount, setReviewedCount] = useState(0);
 
+  // Active Concept Node state in Diagram view
+  const [activeConceptNode, setActiveConceptNode] = useState<string>('mha');
+
   // Guest pass / Auth
   const [isGeneratingPass, setIsGeneratingPass] = useState(false);
 
   const doc = DOC_PRESETS[activeDocKey];
   const activeCard = FLASHCARD_DECK[cardIndex];
 
-  // Global keyboard shortcuts
+  // Global keyboard shortcuts and header event listener
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
       if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === 'k') {
@@ -184,8 +191,16 @@ export default function ZenStudyStudioPage() {
         setSelectionPopover(null);
       }
     };
+
+    const handleOpenPalette = () => setIsCommandOpen(true);
+
     window.addEventListener('keydown', handleKeyDown);
-    return () => window.removeEventListener('keydown', handleKeyDown);
+    window.addEventListener('open-command-palette', handleOpenPalette);
+
+    return () => {
+      window.removeEventListener('keydown', handleKeyDown);
+      window.removeEventListener('open-command-palette', handleOpenPalette);
+    };
   }, []);
 
   // Handle text selection in reader
@@ -216,7 +231,9 @@ export default function ZenStudyStudioPage() {
 
   // Trigger Socratic question from selection
   const handleExplainSelection = (customQuery?: string) => {
-    const query = customQuery || (selectionPopover ? `Can you explain the significance of "${selectionPopover.text}" in detail?` : '');
+    const query =
+      customQuery ||
+      (selectionPopover ? `Can you explain the significance of "${selectionPopover.text}" in detail?` : '');
     if (!query) return;
 
     setActiveMode('interrogate');
@@ -243,23 +260,36 @@ export default function ZenStudyStudioPage() {
       let replyText = '';
       let replyCitation = {
         section: '§3.2 Multi-Head Attention',
-        quote: 'Multi-head attention allows the model to jointly attend to information from different representation subspaces at different positions.'
+        quote:
+          'Multi-head attention allows the model to jointly attend to information from different representation subspaces at different positions.'
       };
 
       const lower = query.toLowerCase();
-      if (lower.includes('scale') || lower.includes('root') || lower.includes('variance') || lower.includes('d_k')) {
+      if (
+        lower.includes('scale') ||
+        lower.includes('root') ||
+        lower.includes('variance') ||
+        lower.includes('d_k')
+      ) {
         replyText =
-          'The scaling factor 1/√d_k is mathematically critical. When d_k is large, the dot products grow large, pushing the softmax function into regions of extremely small gradients (vanishing gradients). Multiplying by 1/√d_k scales the variance back to 1.';
+          'The scaling factor 1/√d_k is mathematically critical. When d_k is large, the dot products grow large, pushing the softmax function into regions of extremely small gradients. Multiplying by 1/√d_k scales the variance back to 1.';
         replyCitation = {
           section: '§3.2.1 Scaled Dot-Product Attention',
-          quote: 'To illustrate why the dot products get large, assume that the components of q and k are independent random variables with mean 0 and variance 1. Then their dot product has mean 0 and variance d_k.'
+          quote:
+            'To illustrate why the dot products get large, assume that the components of q and k are independent random variables with mean 0 and variance 1. Then their dot product has mean 0 and variance d_k.'
         };
-      } else if (lower.includes('complexity') || lower.includes('o(1)') || lower.includes('rnn') || lower.includes('path')) {
+      } else if (
+        lower.includes('complexity') ||
+        lower.includes('o(1)') ||
+        lower.includes('rnn') ||
+        lower.includes('path')
+      ) {
         replyText =
           'In recurrent layers (RNNs), passing information between two distant positions requires O(n) sequential steps. In Self-Attention, the maximum path length between any two words is strictly O(1), allowing gradients to propagate directly without sequential degradation.';
         replyCitation = {
           section: '§4.0 Table 1: Maximum Path Lengths',
-          quote: 'Self-Attention layer: O(1) sequential operations, O(n² · d) complexity per layer, O(1) maximum path length.'
+          quote:
+            'Self-Attention layer: O(1) sequential operations, O(n² · d) complexity per layer, O(1) maximum path length.'
         };
       } else {
         replyText = `Based on grounded analysis of ${doc.title}: this mechanism decouples sequence transformation from recurrent state tracking. The attention weights dynamically construct a weighted adjacency matrix over the entire context window in parallel.`;
@@ -285,7 +315,7 @@ export default function ZenStudyStudioPage() {
       authStorage.setToken('guest_scholar_token_distraction_free');
       setIsGeneratingPass(false);
       router.push('/dashboard');
-    }, 450);
+    }, 400);
   };
 
   // Ingestion mock submission
@@ -300,451 +330,733 @@ export default function ZenStudyStudioPage() {
       setIngestInput('');
       setActiveDocKey('deepseek');
       setActiveMode('read');
-    }, 900);
+      const studioElem = document.getElementById('live-studio');
+      if (studioElem) studioElem.scrollIntoView({ behavior: 'smooth' });
+    }, 850);
   };
 
   return (
     <div className="min-h-screen bg-canvas text-ink-primary font-sans antialiased selection:bg-accent-cyan/20 selection:text-ink-primary">
-      {/* Top Universal Studio Header */}
-      <SanctuaryHeader onOpenCommandPalette={() => setIsCommandOpen(true)} />
-
-      {/* Focused Mode & Document Control Bar */}
-      <div className="border-b border-rule-border bg-surface/80 backdrop-blur-md sticky top-14 z-30 transition-colors">
-        <div className="max-w-5xl mx-auto px-4 h-12 flex items-center justify-between gap-4">
-          {/* Active Document Selector */}
-          <div className="flex items-center gap-2">
-            <select
-              value={activeDocKey}
-              onChange={(e) => setActiveDocKey(e.target.value)}
-              className="bg-surface-elevated border border-rule-border text-ink-primary text-xs rounded-md px-2.5 py-1 font-mono focus:outline-none focus:border-accent-cyan transition-colors"
-            >
-              <option value="vaswani">Vaswani et al. (2017) · Attention Is All You Need</option>
-              <option value="deepseek">DeepSeek-R1 (2025) · Reasoning via RL</option>
-              <option value="cs229">Stanford CS229 · Machine Learning Lectures</option>
-            </select>
-
-            <span className="hidden sm:inline text-ink-muted text-xs font-mono">
-              {doc.readTime} study
-            </span>
+      {/* ========================================================= */}
+      {/* 1. BRAND HERO SECTION: MISSION & POSITIONING              */}
+      {/* ========================================================= */}
+      <section className="relative overflow-hidden border-b border-rule-border pt-16 pb-20 sm:pt-24 sm:pb-28">
+        <div className="max-w-5xl mx-auto px-4 text-center">
+          {/* Brand Pill */}
+          <div className="inline-flex items-center gap-2 px-3 py-1.5 rounded-full border border-rule-border bg-surface-elevated text-xs font-mono text-ink-muted mb-8 shadow-sm">
+            <span className="w-2 h-2 rounded-full bg-accent-cyan animate-pulse"></span>
+            <span className="text-ink-primary font-medium">Learnability Pro</span>
+            <span className="text-rule-strong">·</span>
+            <span>Multimodal Cognitive Deep-Work Studio</span>
           </div>
 
-          {/* Tri-Mode Cognitive Switcher */}
-          <div className="flex items-center bg-surface-elevated p-0.5 rounded-lg border border-rule-border">
-            <button
-              onClick={() => setActiveMode('read')}
-              className={`px-3 py-1 rounded-md text-xs font-mono transition-all flex items-center gap-1.5 ${
-                activeMode === 'read'
-                  ? 'bg-canvas text-accent-cyan shadow-sm border border-rule-border font-medium'
-                  : 'text-ink-muted hover:text-ink-primary'
-              }`}
+          {/* Core Brand Headline */}
+          <h1 className="text-3xl sm:text-5xl md:text-6xl font-bold tracking-tight text-ink-primary mb-6 leading-tight max-w-4xl mx-auto">
+            Transform Dense Literature Into <br className="hidden sm:inline" />
+            <span className="text-accent-cyan">Permanent Comprehension.</span>
+          </h1>
+
+          {/* Subtitle */}
+          <p className="text-base sm:text-lg text-ink-body max-w-2xl mx-auto mb-10 leading-relaxed">
+            Generic AI chat produces detached summaries that hallucinate. Learnability Pro pairs source literature with structured cognitive primitives: grounded Socratic interrogation, visual concept hierarchies, and active recall drills.
+          </p>
+
+          {/* Hero CTAs */}
+          <div className="flex flex-wrap items-center justify-center gap-3 font-mono text-xs">
+            <a
+              href="#live-studio"
+              className="px-5 py-3 rounded-lg bg-accent-cyan text-slate-950 font-bold hover:bg-accent-cyan/90 transition-all flex items-center gap-2 shadow-lg shadow-cyan-500/20"
             >
-              <BookOpen className="w-3.5 h-3.5" />
-              <span>Read</span>
-            </button>
+              <Sparkles className="w-4 h-4" />
+              <span>Test-Drive Live Studio Below</span>
+              <ArrowDown className="w-3.5 h-3.5" />
+            </a>
 
             <button
-              onClick={() => setActiveMode('interrogate')}
-              className={`px-3 py-1 rounded-md text-xs font-mono transition-all flex items-center gap-1.5 ${
-                activeMode === 'interrogate'
-                  ? 'bg-canvas text-accent-cyan shadow-sm border border-rule-border font-medium'
-                  : 'text-ink-muted hover:text-ink-primary'
-              }`}
+              onClick={handleQuickScholarPass}
+              disabled={isGeneratingPass}
+              className="px-5 py-3 rounded-lg border border-rule-border bg-surface hover:bg-surface-elevated text-ink-primary font-semibold transition-all flex items-center gap-2"
             >
-              <MessageSquare className="w-3.5 h-3.5" />
-              <span>Interrogate</span>
+              <GraduationCap className="w-4 h-4 text-accent-cyan" />
+              <span>{isGeneratingPass ? 'Activating Pass...' : '1-Click Scholar Pass'}</span>
             </button>
 
-            <button
-              onClick={() => setActiveMode('recall')}
-              className={`px-3 py-1 rounded-md text-xs font-mono transition-all flex items-center gap-1.5 ${
-                activeMode === 'recall'
-                  ? 'bg-canvas text-accent-cyan shadow-sm border border-rule-border font-medium'
-                  : 'text-ink-muted hover:text-ink-primary'
-              }`}
+            <a
+              href="#modalities"
+              className="px-4 py-3 rounded-lg text-ink-muted hover:text-ink-primary transition-colors flex items-center gap-1.5"
             >
-              <RotateCcw className="w-3.5 h-3.5" />
-              <span>Recall ({FLASHCARD_DECK.length})</span>
-            </button>
+              <span>Explore The 4 Learning Primitives</span>
+              <ChevronRight className="w-3.5 h-3.5" />
+            </a>
           </div>
 
-          {/* Ingest Action Button */}
-          <div className="flex items-center gap-2">
-            <button
-              onClick={() => setIsIngestOpen(true)}
-              className="px-2.5 py-1 text-xs font-mono rounded-md border border-rule-border hover:border-rule-strong text-ink-muted hover:text-ink-primary transition-colors flex items-center gap-1"
-            >
-              <Plus className="w-3 h-3 text-accent-cyan" />
-              <span className="hidden sm:inline">Ingest</span>
-            </button>
+          {/* Core Trust Badges */}
+          <div className="mt-14 pt-8 border-t border-rule-border grid grid-cols-2 sm:grid-cols-4 gap-4 max-w-3xl mx-auto text-left">
+            <div className="p-3 rounded-lg bg-surface border border-rule-border">
+              <div className="text-xs font-mono text-accent-cyan font-semibold mb-1">0% Hallucination</div>
+              <div className="text-[11px] text-ink-muted">Strict source-anchored mathematical provenance</div>
+            </div>
+            <div className="p-3 rounded-lg bg-surface border border-rule-border">
+              <div className="text-xs font-mono text-accent-cyan font-semibold mb-1">Multi-Modal</div>
+              <div className="text-[11px] text-ink-muted">PDF Papers, arXiv DOIs, YouTube & Topics</div>
+            </div>
+            <div className="p-3 rounded-lg bg-surface border border-rule-border">
+              <div className="text-xs font-mono text-accent-cyan font-semibold mb-1">Mermaid DAGs</div>
+              <div className="text-[11px] text-ink-muted">Concept relationship trees and prerequisite maps</div>
+            </div>
+            <div className="p-3 rounded-lg bg-surface border border-rule-border">
+              <div className="text-xs font-mono text-accent-cyan font-semibold mb-1">Leitner Recall</div>
+              <div className="text-[11px] text-ink-muted">4-box spaced repetition for long-term retention</div>
+            </div>
           </div>
         </div>
-      </div>
+      </section>
 
-      {/* Main Study Workspace */}
-      <main className="max-w-5xl mx-auto px-4 py-8">
-        {/* ========================================================= */}
-        {/* MODE 1: FOCUS READ (Distraction-Free Sanctuary)            */}
-        {/* ========================================================= */}
-        {activeMode === 'read' && (
-          <div className="max-w-2xl mx-auto" onMouseUp={handleReaderMouseUp}>
-            {/* Monograph Header */}
-            <div className="mb-10 pb-6 border-b border-rule-border">
-              <div className="flex items-center gap-2 mb-3">
-                <span className="px-2 py-0.5 rounded text-[11px] font-mono bg-accent-cyan/10 text-accent-cyan border border-accent-cyan/20">
-                  {doc.type}
-                </span>
-                <span className="text-xs text-ink-muted font-mono">{doc.venue}</span>
-              </div>
-              <h1 className="text-2xl sm:text-3xl font-bold tracking-tight text-ink-primary mb-3 leading-snug">
-                {doc.title}
-              </h1>
-              <p className="text-xs text-ink-muted font-mono mb-4">{doc.authors}</p>
-              <div className="flex items-center gap-4 text-xs font-mono text-ink-muted">
-                <span className="flex items-center gap-1 text-accent-emerald">
-                  <ShieldCheck className="w-3.5 h-3.5" />
-                  {doc.groundedScore}% Grounded Provenance
-                </span>
-                <span>·</span>
-                <span>Highlight any passage to summon Scholar AI</span>
-              </div>
-            </div>
-
-            {/* Reading Document Body */}
-            <article className="prose prose-invert max-w-none text-ink-body leading-relaxed space-y-6 text-[15px]">
-              {/* Section 1 */}
-              <section id="sec-1" className="group">
-                <div className="flex items-baseline justify-between text-ink-muted font-mono text-xs mb-2">
-                  <span className="font-semibold text-accent-cyan">§ 1.0 Introduction</span>
-                  <span className="text-[11px] opacity-0 group-hover:opacity-100 transition-opacity">Page 1</span>
-                </div>
-                <p>
-                  Recurrent neural networks, long short-term memory (LSTM), and gated recurrent neural networks have been firmly established as state-of-the-art approaches in sequence modeling and transduction problems such as language modeling and machine translation. Subsequent efforts have since continued to push the boundaries of recurrent language models and encoder-decoder architectures.
-                </p>
-                <p className="mt-4">
-                  Recurrent models typically factor computation along the symbol positions of the input and output sequences. Aligning the positions to steps in computation time, they generate a sequence of hidden states <code className="text-xs font-mono px-1 py-0.5 rounded bg-surface-elevated text-ink-primary">h_t</code>, as a function of the previous hidden state <code className="text-xs font-mono px-1 py-0.5 rounded bg-surface-elevated text-ink-primary">h_t-1</code> and the input for position <code className="text-xs font-mono px-1 py-0.5 rounded bg-surface-elevated text-ink-primary">t</code>.
-                </p>
-              </section>
-
-              {/* Section 2 Callout */}
-              <section id="sec-2" className="group my-8 p-4 rounded-lg bg-surface border border-rule-border">
-                <div className="text-xs font-mono text-accent-cyan font-semibold mb-2">
-                  § 2.0 Architectural Bottleneck: The Sequential Constraint
-                </div>
-                <p className="text-sm text-ink-body">
-                  This inherently sequential nature precludes parallelization within training examples, which becomes critical at longer sequence lengths, as memory constraints limit batching across examples.
-                </p>
-              </section>
-
-              {/* Section 3.2 Main Technical Core */}
-              <section id="sec-3-2" className="group">
-                <div className="flex items-baseline justify-between text-ink-muted font-mono text-xs mb-2">
-                  <span className="font-semibold text-accent-cyan">§ 3.2 Multi-Head Attention</span>
-                  <span className="text-[11px] opacity-0 group-hover:opacity-100 transition-opacity">Page 4 · Core Insight</span>
-                </div>
-                <p>
-                  An attention function can be described as mapping a query and a set of key-value pairs to an output, where the query, keys, values, and output are all vectors. The output is computed as a weighted sum of the values, where the weight assigned to each value is computed by a compatibility function of the query with the corresponding key.
-                </p>
-
-                {/* Mathematical Equation Anchor */}
-                <div className="my-6 p-4 rounded-lg bg-surface border border-rule-border text-center font-mono text-sm sm:text-base text-ink-primary">
-                  <div className="text-xs text-ink-muted mb-2 font-mono">Equation (1): Scaled Dot-Product Attention</div>
-                  <div className="tracking-wide py-2">
-                    Attention(<span className="text-accent-cyan font-semibold">Q</span>, <span className="text-accent-cyan font-semibold">K</span>, <span className="text-accent-cyan font-semibold">V</span>) = softmax(
-                    <span className="underline decoration-accent-cyan/60 underline-offset-4">QKᵀ / √d_k</span>)V
-                  </div>
-                  <div className="text-xs text-ink-muted mt-2">
-                    Dimension: <span className="text-ink-primary">Q, K ∈ ℝ^{'{n × d_k}'}</span>, <span className="text-ink-primary">V ∈ ℝ^{'{n × d_v}'}</span>
-                  </div>
-                </div>
-
-                <p>
-                  We compute the dot products of the query with all keys, divide each by <code className="text-xs font-mono px-1 py-0.5 rounded bg-surface-elevated text-ink-primary">√d_k</code>, and apply a softmax function to obtain the weights on the values. We suspect that for large values of <code className="text-xs font-mono px-1 py-0.5 rounded bg-surface-elevated text-ink-primary">d_k</code>, the dot products grow large in magnitude, pushing the softmax function into regions with extremely small gradients.
-                </p>
-              </section>
-
-              {/* Quick Jump to Socratic Interrogation */}
-              <div className="my-10 pt-6 border-t border-rule-border flex items-center justify-between">
-                <span className="text-xs font-mono text-ink-muted">Need deeper clarity on this section?</span>
-                <button
-                  onClick={() => {
-                    setActiveMode('interrogate');
-                    handleSendMessage('Explain the mathematical intuition behind dividing QK^T by √d_k in Equation 1.');
-                  }}
-                  className="px-3 py-1.5 rounded-md text-xs font-mono bg-surface-elevated hover:bg-surface border border-rule-border text-accent-cyan flex items-center gap-1.5 transition-all shadow-sm"
-                >
-                  <Sparkles className="w-3.5 h-3.5" />
-                  <span>Interrogate §3.2 with Socratic AI</span>
-                  <ChevronRight className="w-3.5 h-3.5" />
-                </button>
-              </div>
-            </article>
-
-            {/* Contextual Floating Selection Popover */}
-            {selectionPopover && (
-              <div
-                style={{
-                  position: 'fixed',
-                  left: `${selectionPopover.x}px`,
-                  top: `${selectionPopover.y}px`,
-                  transform: 'translate(-50%, -100%)'
-                }}
-                className="z-50 bg-surface-elevated border border-rule-border shadow-xl rounded-lg p-1.5 flex items-center gap-1 text-xs font-mono animate-in fade-in zoom-in-95 duration-150"
-              >
-                <button
-                  onClick={() => handleExplainSelection()}
-                  className="px-2.5 py-1 rounded bg-accent-cyan/10 hover:bg-accent-cyan/20 text-accent-cyan flex items-center gap-1 transition-colors"
-                >
-                  <Sparkles className="w-3 h-3" />
-                  <span>Explain Passage</span>
-                </button>
-                <button
-                  onClick={() => {
-                    setActiveMode('recall');
-                    setSelectionPopover(null);
-                  }}
-                  className="px-2.5 py-1 rounded hover:bg-surface text-ink-muted hover:text-ink-primary flex items-center gap-1 transition-colors"
-                >
-                  <RotateCcw className="w-3 h-3" />
-                  <span>Recall Card</span>
-                </button>
-                <button
-                  onClick={() => setSelectionPopover(null)}
-                  className="p-1 rounded hover:bg-surface text-ink-muted hover:text-ink-primary"
-                >
-                  <X className="w-3 h-3" />
-                </button>
-              </div>
-            )}
+      {/* ========================================================= */}
+      {/* 2. THE 4 MODALITIES OF LEARNING IN OUR APPLICATION         */}
+      {/* ========================================================= */}
+      <section id="modalities" className="py-20 border-b border-rule-border bg-surface/40">
+        <div className="max-w-5xl mx-auto px-4">
+          <div className="text-center max-w-2xl mx-auto mb-16">
+            <span className="text-xs font-mono uppercase tracking-wider text-accent-cyan font-semibold">
+              The Cognitive Architecture
+            </span>
+            <h2 className="text-2xl sm:text-3xl font-bold text-ink-primary mt-2 mb-3">
+              Four Deliberate Stages of True Mastery
+            </h2>
+            <p className="text-sm text-ink-body">
+              How Learnability Pro takes you from raw information to fluent, long-term conceptual recall.
+            </p>
           </div>
-        )}
 
-        {/* ========================================================= */}
-        {/* MODE 2: INTERROGATE (Calm 2-Pane Socratic Dialogue)       */}
-        {/* ========================================================= */}
-        {activeMode === 'interrogate' && (
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-8 items-start">
-            {/* Left Column: Anchored Reference Text */}
-            <div className="rounded-xl border border-rule-border bg-surface p-6 text-sm leading-relaxed max-h-[75vh] overflow-y-auto">
-              <div className="flex items-center justify-between pb-3 mb-4 border-b border-rule-border font-mono text-xs text-ink-muted">
-                <span className="font-semibold text-ink-primary">Source Anchor: {doc.title}</span>
-                <span className="text-accent-emerald flex items-center gap-1">
-                  <ShieldCheck className="w-3 h-3" /> Grounded
-                </span>
-              </div>
-
-              <div className="space-y-4 text-ink-body">
-                <p className="bg-accent-cyan/5 border-l-2 border-accent-cyan pl-3 py-1 text-ink-primary">
-                  <strong>§ 3.2 Multi-Head Attention:</strong> Multi-head attention allows the model to jointly attend to information from different representation subspaces at different positions. With a single attention head, averaging inhibits this.
-                </p>
-                <div className="p-3 rounded bg-canvas border border-rule-border font-mono text-xs text-center">
-                  Attention(Q, K, V) = softmax(QKᵀ / √d_k)V
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+            {/* Modality 1: Multi-Modal Ingestion */}
+            <div className="p-6 rounded-xl border border-rule-border bg-surface hover:border-rule-strong transition-all flex flex-col justify-between">
+              <div>
+                <div className="w-9 h-9 rounded-lg bg-accent-cyan/10 border border-accent-cyan/20 flex items-center justify-center text-accent-cyan mb-4">
+                  <Upload className="w-4 h-4" />
                 </div>
-                <p className="text-xs text-ink-muted">
-                  <strong>§ 4.0 Complexity:</strong> Self-attention connects all positions with a constant number of sequentially executed operations (O(1)), whereas recurrent layers require O(n) sequential operations.
+                <div className="text-xs font-mono text-accent-cyan font-semibold mb-1">Stage 01 · Ingestion</div>
+                <h3 className="text-lg font-bold text-ink-primary mb-2">
+                  Topic, PDF & YouTube Ingestion
+                </h3>
+                <p className="text-xs text-ink-body leading-relaxed mb-4">
+                  Ingest textbooks, slide decks, arXiv papers, or video lecture transcripts. Materials are tokenized and indexed into 1536-dimensional vector space with exact paragraph and equation anchors.
                 </p>
+              </div>
+              <div className="p-3 rounded-lg bg-canvas border border-rule-border font-mono text-[11px] text-ink-muted flex items-center justify-between">
+                <span>Supports: PDF, arXiv DOI, YouTube URLs, Curated Topics</span>
+                <span className="text-accent-emerald flex items-center gap-1 font-semibold">
+                  <CheckCircle2 className="w-3 h-3" /> Ready
+                </span>
               </div>
             </div>
 
-            {/* Right Column: Grounded Socratic Dialogue */}
-            <div className="rounded-xl border border-rule-border bg-surface flex flex-col h-[75vh]">
-              {/* Header */}
-              <div className="px-4 py-3 border-b border-rule-border flex items-center justify-between font-mono text-xs">
-                <div className="flex items-center gap-2">
-                  <Sparkles className="w-3.5 h-3.5 text-accent-cyan" />
-                  <span className="font-semibold text-ink-primary">Socratic Companion</span>
+            {/* Modality 2: Grounded Socratic Interrogation */}
+            <div className="p-6 rounded-xl border border-rule-border bg-surface hover:border-rule-strong transition-all flex flex-col justify-between">
+              <div>
+                <div className="w-9 h-9 rounded-lg bg-accent-cyan/10 border border-accent-cyan/20 flex items-center justify-center text-accent-cyan mb-4">
+                  <MessageSquare className="w-4 h-4" />
                 </div>
-                <span className="text-[11px] text-ink-muted">Strict Ground-Truth RAG</span>
+                <div className="text-xs font-mono text-accent-cyan font-semibold mb-1">Stage 02 · Interrogation</div>
+                <h3 className="text-lg font-bold text-ink-primary mb-2">
+                  Socratic Interrogation & Probe Sessions
+                </h3>
+                <p className="text-xs text-ink-body leading-relaxed mb-4">
+                  Reading alone is passive. The Socratic tutor actively challenges your reasoning, asking targeted probe questions on mathematical steps, trade-offs, and proofs—with zero detached hallucination.
+                </p>
               </div>
+              <div className="p-3 rounded-lg bg-canvas border border-rule-border font-mono text-[11px] text-ink-muted flex items-center justify-between">
+                <span>100% Grounded citations with section & page markers</span>
+                <span className="text-accent-cyan font-semibold">Live Probing</span>
+              </div>
+            </div>
 
-              {/* Message History */}
-              <div className="flex-1 overflow-y-auto p-4 space-y-4">
-                {chatMessages.map((msg) => (
-                  <div
-                    key={msg.id}
-                    className={`flex flex-col ${
-                      msg.sender === 'user' ? 'items-end' : 'items-start'
-                    }`}
-                  >
-                    <div
-                      className={`max-w-[88%] rounded-lg p-3 text-xs leading-relaxed ${
-                        msg.sender === 'user'
-                          ? 'bg-accent-cyan text-slate-950 font-medium'
-                          : 'bg-surface-elevated text-ink-body border border-rule-border'
-                      }`}
-                    >
-                      {msg.text}
-                    </div>
+            {/* Modality 3: Visual Concept Hierarchies & Diagrams */}
+            <div className="p-6 rounded-xl border border-rule-border bg-surface hover:border-rule-strong transition-all flex flex-col justify-between">
+              <div>
+                <div className="w-9 h-9 rounded-lg bg-accent-cyan/10 border border-accent-cyan/20 flex items-center justify-center text-accent-cyan mb-4">
+                  <Network className="w-4 h-4" />
+                </div>
+                <div className="text-xs font-mono text-accent-cyan font-semibold mb-1">Stage 03 · Visual Hierarchy</div>
+                <h3 className="text-lg font-bold text-ink-primary mb-2">
+                  Mermaid Concept Trees & Relationship DAGs
+                </h3>
+                <p className="text-xs text-ink-body leading-relaxed mb-4">
+                  Understand complex topics through architectural relationships. Automatic Mermaid diagrams map dependencies, architectural layers, and cross-attention connections so you see the big picture.
+                </p>
+              </div>
+              <div className="p-3 rounded-lg bg-canvas border border-rule-border font-mono text-[11px] text-ink-muted flex items-center justify-between">
+                <span>Dynamic directed acyclic graphs & concept maps</span>
+                <span className="text-accent-cyan font-semibold">Mermaid.js</span>
+              </div>
+            </div>
 
-                    {/* Grounded Citation Card */}
-                    {msg.citation && (
-                      <div className="mt-2 max-w-[88%] rounded-md bg-canvas border border-rule-border p-2 text-[11px] font-mono text-ink-muted">
-                        <div className="flex items-center gap-1.5 text-accent-emerald font-semibold mb-1">
-                          <Check className="w-3 h-3" />
-                          <span>{msg.citation.section}</span>
-                        </div>
-                        <p className="italic text-ink-subtle">"{msg.citation.quote}"</p>
-                      </div>
-                    )}
+            {/* Modality 4: Leitner Spaced Repetition Flashcards */}
+            <div className="p-6 rounded-xl border border-rule-border bg-surface hover:border-rule-strong transition-all flex flex-col justify-between">
+              <div>
+                <div className="w-9 h-9 rounded-lg bg-accent-cyan/10 border border-accent-cyan/20 flex items-center justify-center text-accent-cyan mb-4">
+                  <RotateCcw className="w-4 h-4" />
+                </div>
+                <div className="text-xs font-mono text-accent-cyan font-semibold mb-1">Stage 04 · Long-Term Retention</div>
+                <h3 className="text-lg font-bold text-ink-primary mb-2">
+                  Leitner Active Recall Spaced Repetition
+                </h3>
+                <p className="text-xs text-ink-body leading-relaxed mb-4">
+                  Convert key concepts into structured flashcards generated straight from literature. The 4-box Leitner system schedules reviews (1d, 3d, 6d, 14d) to guarantee permanent memory consolidation.
+                </p>
+              </div>
+              <div className="p-3 rounded-lg bg-canvas border border-rule-border font-mono text-[11px] text-ink-muted flex items-center justify-between">
+                <span>Adaptive Leitner interval scheduling</span>
+                <span className="text-accent-emerald flex items-center gap-1 font-semibold">
+                  <ShieldCheck className="w-3 h-3" /> High Retention
+                </span>
+              </div>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      {/* ========================================================= */}
+      {/* 3. INTERACTIVE LIVE STUDY STUDIO SANDBOX                  */}
+      {/* ========================================================= */}
+      <section id="live-studio" className="py-16">
+        <div className="max-w-5xl mx-auto px-4">
+          {/* Studio Header Bar */}
+          <div className="text-center max-w-2xl mx-auto mb-8">
+            <span className="text-xs font-mono uppercase tracking-wider text-accent-cyan font-semibold">
+              Live Product Experience
+            </span>
+            <h2 className="text-2xl sm:text-3xl font-bold text-ink-primary mt-1 mb-2">
+              The Distraction-Free Study Studio
+            </h2>
+            <p className="text-xs text-ink-muted font-mono">
+              Test-drive all 4 learning modalities right here with Vaswani et al. (2017)
+            </p>
+          </div>
+
+          {/* Studio Controls Header */}
+          <div className="border border-rule-border rounded-t-xl bg-surface p-3 flex flex-wrap items-center justify-between gap-3">
+            {/* Preset Document Switcher */}
+            <div className="flex items-center gap-2">
+              <span className="text-xs font-mono text-ink-muted hidden sm:inline">Literature:</span>
+              <select
+                value={activeDocKey}
+                onChange={(e) => setActiveDocKey(e.target.value)}
+                className="bg-surface-elevated border border-rule-border text-ink-primary text-xs rounded-md px-2.5 py-1.5 font-mono focus:outline-none focus:border-accent-cyan transition-colors"
+              >
+                <option value="vaswani">Vaswani et al. (2017) · Attention Is All You Need</option>
+                <option value="deepseek">DeepSeek-R1 (2025) · Reasoning via RL</option>
+                <option value="cs229">Stanford CS229 · Machine Learning Lectures</option>
+              </select>
+            </div>
+
+            {/* Studio Mode Switcher */}
+            <div className="flex items-center bg-surface-elevated p-1 rounded-lg border border-rule-border">
+              <button
+                onClick={() => setActiveMode('read')}
+                className={`px-3 py-1 rounded-md text-xs font-mono transition-all flex items-center gap-1.5 ${
+                  activeMode === 'read'
+                    ? 'bg-canvas text-accent-cyan shadow-sm border border-rule-border font-medium'
+                    : 'text-ink-muted hover:text-ink-primary'
+                }`}
+              >
+                <BookOpen className="w-3.5 h-3.5" />
+                <span>1. Read</span>
+              </button>
+
+              <button
+                onClick={() => setActiveMode('interrogate')}
+                className={`px-3 py-1 rounded-md text-xs font-mono transition-all flex items-center gap-1.5 ${
+                  activeMode === 'interrogate'
+                    ? 'bg-canvas text-accent-cyan shadow-sm border border-rule-border font-medium'
+                    : 'text-ink-muted hover:text-ink-primary'
+                }`}
+              >
+                <MessageSquare className="w-3.5 h-3.5" />
+                <span>2. Socratic Chat</span>
+              </button>
+
+              <button
+                onClick={() => setActiveMode('diagram')}
+                className={`px-3 py-1 rounded-md text-xs font-mono transition-all flex items-center gap-1.5 ${
+                  activeMode === 'diagram'
+                    ? 'bg-canvas text-accent-cyan shadow-sm border border-rule-border font-medium'
+                    : 'text-ink-muted hover:text-ink-primary'
+                }`}
+              >
+                <Network className="w-3.5 h-3.5" />
+                <span>3. Concept Tree</span>
+              </button>
+
+              <button
+                onClick={() => setActiveMode('recall')}
+                className={`px-3 py-1 rounded-md text-xs font-mono transition-all flex items-center gap-1.5 ${
+                  activeMode === 'recall'
+                    ? 'bg-canvas text-accent-cyan shadow-sm border border-rule-border font-medium'
+                    : 'text-ink-muted hover:text-ink-primary'
+                }`}
+              >
+                <RotateCcw className="w-3.5 h-3.5" />
+                <span>4. Recall ({FLASHCARD_DECK.length})</span>
+              </button>
+            </div>
+
+            {/* Ingestion Trigger Button */}
+            <button
+              onClick={() => setIsIngestOpen(true)}
+              className="px-3 py-1.5 text-xs font-mono rounded-md bg-accent-cyan/10 hover:bg-accent-cyan/20 border border-accent-cyan/30 text-accent-cyan font-medium flex items-center gap-1.5 transition-colors"
+            >
+              <Plus className="w-3.5 h-3.5" />
+              <span>Ingest New Material</span>
+            </button>
+          </div>
+
+          {/* Studio Container */}
+          <div className="border-x border-b border-rule-border rounded-b-xl bg-canvas p-6 sm:p-8 min-h-[520px]">
+            {/* --------------------------------------------------------- */}
+            {/* MODE 1: FOCUS READ (Distraction-Free Sanctuary)            */}
+            {/* --------------------------------------------------------- */}
+            {activeMode === 'read' && (
+              <div className="max-w-2xl mx-auto" onMouseUp={handleReaderMouseUp}>
+                <div className="mb-8 pb-4 border-b border-rule-border">
+                  <div className="flex items-center gap-2 mb-2">
+                    <span className="px-2 py-0.5 rounded text-[11px] font-mono bg-accent-cyan/10 text-accent-cyan border border-accent-cyan/20">
+                      {doc.type}
+                    </span>
+                    <span className="text-xs text-ink-muted font-mono">{doc.venue}</span>
                   </div>
-                ))}
+                  <h3 className="text-xl sm:text-2xl font-bold tracking-tight text-ink-primary mb-2">
+                    {doc.title}
+                  </h3>
+                  <div className="flex items-center gap-3 text-xs font-mono text-ink-muted">
+                    <span className="text-accent-emerald flex items-center gap-1">
+                      <ShieldCheck className="w-3.5 h-3.5" />
+                      {doc.groundedScore}% Grounded Provenance
+                    </span>
+                    <span>·</span>
+                    <span className="text-ink-subtle">Highlight any sentence to summon Scholar AI</span>
+                  </div>
+                </div>
 
-                {isThinking && (
-                  <div className="flex items-center gap-2 text-xs font-mono text-ink-muted p-2">
-                    <span className="w-2 h-2 rounded-full bg-accent-cyan animate-pulse"></span>
-                    <span>Retrieving verified document embeddings...</span>
+                <article className="space-y-6 text-[15px] leading-relaxed text-ink-body">
+                  <section>
+                    <div className="text-xs font-mono text-accent-cyan font-semibold mb-1">§ 1.0 Introduction</div>
+                    <p>
+                      Recurrent neural networks factor computation along the symbol positions of the input and output sequences. Aligning positions to steps in computation time, they generate a sequence of hidden states <code className="text-xs font-mono px-1 py-0.5 rounded bg-surface-elevated text-ink-primary">h_t</code>. This inherently sequential nature precludes parallelization within training examples.
+                    </p>
+                  </section>
+
+                  <section className="p-4 rounded-lg bg-surface border border-rule-border">
+                    <div className="text-xs font-mono text-accent-cyan font-semibold mb-1">
+                      § 3.2 Multi-Head Attention Mechanism
+                    </div>
+                    <p className="text-sm">
+                      An attention function can be described as mapping a query and a set of key-value pairs to an output. Instead of performing a single attention function, we found it beneficial to linearly project queries, keys, and values <code className="text-xs font-mono px-1 py-0.5 rounded bg-surface-elevated text-ink-primary">h = 8</code> times with different, learned linear projections.
+                    </p>
+                    <div className="my-4 p-3 rounded bg-canvas border border-rule-border text-center font-mono text-sm text-ink-primary">
+                      Attention(<span className="text-accent-cyan font-semibold">Q</span>, <span className="text-accent-cyan font-semibold">K</span>, <span className="text-accent-cyan font-semibold">V</span>) = softmax(QKᵀ / √d_k)V
+                    </div>
+                    <p className="text-xs text-ink-muted">
+                      Dividing by <code className="font-mono text-ink-primary">√d_k</code> prevents the dot products from growing large, avoiding saturation in regions of vanishing gradients.
+                    </p>
+                  </section>
+
+                  {/* Fast Jump CTAs */}
+                  <div className="pt-4 flex items-center justify-between border-t border-rule-border">
+                    <button
+                      onClick={() => {
+                        setActiveMode('interrogate');
+                        handleSendMessage('Explain why √d_k variance normalization is required.');
+                      }}
+                      className="text-xs font-mono text-accent-cyan hover:underline flex items-center gap-1"
+                    >
+                      <Sparkles className="w-3.5 h-3.5" />
+                      <span>Ask Socratic AI about §3.2</span>
+                    </button>
+                    <button
+                      onClick={() => setActiveMode('diagram')}
+                      className="text-xs font-mono text-ink-muted hover:text-ink-primary flex items-center gap-1"
+                    >
+                      <span>View Concept Relationship Tree</span>
+                      <ChevronRight className="w-3.5 h-3.5" />
+                    </button>
+                  </div>
+                </article>
+
+                {/* Contextual Floating Selection Popover */}
+                {selectionPopover && (
+                  <div
+                    style={{
+                      position: 'fixed',
+                      left: `${selectionPopover.x}px`,
+                      top: `${selectionPopover.y}px`,
+                      transform: 'translate(-50%, -100%)'
+                    }}
+                    className="z-50 bg-surface-elevated border border-rule-border shadow-2xl rounded-lg p-1.5 flex items-center gap-1 text-xs font-mono animate-in fade-in zoom-in-95 duration-150"
+                  >
+                    <button
+                      onClick={() => handleExplainSelection()}
+                      className="px-2.5 py-1 rounded bg-accent-cyan/10 hover:bg-accent-cyan/20 text-accent-cyan flex items-center gap-1 transition-colors"
+                    >
+                      <Sparkles className="w-3 h-3" />
+                      <span>Explain with AI</span>
+                    </button>
+                    <button
+                      onClick={() => {
+                        setActiveMode('recall');
+                        setSelectionPopover(null);
+                      }}
+                      className="px-2.5 py-1 rounded hover:bg-surface text-ink-muted hover:text-ink-primary flex items-center gap-1 transition-colors"
+                    >
+                      <RotateCcw className="w-3 h-3" />
+                      <span>Flashcard</span>
+                    </button>
+                    <button
+                      onClick={() => setSelectionPopover(null)}
+                      className="p-1 rounded hover:bg-surface text-ink-muted hover:text-ink-primary"
+                    >
+                      <X className="w-3 h-3" />
+                    </button>
                   </div>
                 )}
               </div>
+            )}
 
-              {/* Recommended Inquiry Prompts */}
-              <div className="px-4 py-2 border-t border-rule-border flex gap-2 overflow-x-auto text-[11px] font-mono">
-                <button
-                  onClick={() => handleSendMessage('Why divide by √d_k instead of d_k?')}
-                  className="px-2.5 py-1 rounded-full border border-rule-border hover:border-accent-cyan bg-canvas text-ink-muted hover:text-ink-primary whitespace-nowrap transition-colors"
-                >
-                  Why √d_k scaling?
-                </button>
-                <button
-                  onClick={() => handleSendMessage('Explain O(1) path length vs RNNs.')}
-                  className="px-2.5 py-1 rounded-full border border-rule-border hover:border-accent-cyan bg-canvas text-ink-muted hover:text-ink-primary whitespace-nowrap transition-colors"
-                >
-                  O(1) path length vs RNN
-                </button>
-                <button
-                  onClick={() => handleSendMessage('How does multi-head attention preserve subspaces?')}
-                  className="px-2.5 py-1 rounded-full border border-rule-border hover:border-accent-cyan bg-canvas text-ink-muted hover:text-ink-primary whitespace-nowrap transition-colors"
-                >
-                  Subspace preservation
-                </button>
-              </div>
+            {/* --------------------------------------------------------- */}
+            {/* MODE 2: SOCRATIC CHAT & PROBE SESSIONS                    */}
+            {/* --------------------------------------------------------- */}
+            {activeMode === 'interrogate' && (
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-6 items-start">
+                {/* Left: Anchored Reference */}
+                <div className="rounded-xl border border-rule-border bg-surface p-5 text-sm max-h-[460px] overflow-y-auto">
+                  <div className="flex items-center justify-between pb-2 mb-3 border-b border-rule-border font-mono text-xs text-ink-muted">
+                    <span className="font-semibold text-ink-primary">Grounded Document Excerpt</span>
+                    <span className="text-accent-emerald flex items-center gap-1">
+                      <ShieldCheck className="w-3.5 h-3.5" /> 98.4% Provenance
+                    </span>
+                  </div>
+                  <div className="space-y-3 text-xs leading-relaxed text-ink-body">
+                    <div className="p-3 rounded bg-accent-cyan/5 border-l-2 border-accent-cyan">
+                      <strong>§ 3.2.1 Scaled Dot-Product Attention:</strong> We compute dot products of the query with all keys, divide each by √d_k, and apply a softmax function to obtain weights on values.
+                    </div>
+                    <div className="p-3 rounded bg-surface-elevated font-mono text-center">
+                      Attention(Q, K, V) = softmax(QKᵀ / √d_k)V
+                    </div>
+                    <p className="text-ink-muted">
+                      <strong>§ 4.0 Table 1:</strong> Maximum path length between any two word positions is O(1) in self-attention, compared to O(n) in recurrent layers.
+                    </p>
+                  </div>
+                </div>
 
-              {/* Input Area */}
-              <div className="p-3 border-t border-rule-border">
-                <form
-                  onSubmit={(e) => {
-                    e.preventDefault();
-                    handleSendMessage();
-                  }}
-                  className="flex items-center gap-2"
-                >
-                  <input
-                    type="text"
-                    value={inputQuery}
-                    onChange={(e) => setInputQuery(e.target.value)}
-                    placeholder="Ask a question grounded in this literature..."
-                    className="flex-1 bg-canvas border border-rule-border rounded-md px-3 py-2 text-xs text-ink-primary placeholder:text-ink-subtle focus:outline-none focus:border-accent-cyan transition-colors font-sans"
-                  />
-                  <button
-                    type="submit"
-                    disabled={!inputQuery.trim() || isThinking}
-                    className="p-2 rounded-md bg-accent-cyan text-slate-950 hover:bg-accent-cyan/90 disabled:opacity-40 transition-opacity"
+                {/* Right: Dialogue Box */}
+                <div className="rounded-xl border border-rule-border bg-surface flex flex-col h-[460px]">
+                  <div className="px-4 py-3 border-b border-rule-border font-mono text-xs flex items-center justify-between">
+                    <span className="font-semibold text-ink-primary flex items-center gap-1.5">
+                      <Sparkles className="w-3.5 h-3.5 text-accent-cyan" />
+                      Socratic Tutor
+                    </span>
+                    <span className="text-ink-muted text-[11px]">Strict Verification Active</span>
+                  </div>
+
+                  <div className="flex-1 overflow-y-auto p-4 space-y-3">
+                    {chatMessages.map((msg) => (
+                      <div
+                        key={msg.id}
+                        className={`flex flex-col ${msg.sender === 'user' ? 'items-end' : 'items-start'}`}
+                      >
+                        <div
+                          className={`max-w-[90%] rounded-lg p-3 text-xs leading-relaxed ${
+                            msg.sender === 'user'
+                              ? 'bg-accent-cyan text-slate-950 font-medium'
+                              : 'bg-surface-elevated text-ink-body border border-rule-border'
+                          }`}
+                        >
+                          {msg.text}
+                        </div>
+                        {msg.citation && (
+                          <div className="mt-1.5 max-w-[90%] rounded bg-canvas border border-rule-border p-2 text-[11px] font-mono text-ink-muted">
+                            <span className="text-accent-emerald font-semibold block mb-0.5">
+                              ✓ {msg.citation.section}
+                            </span>
+                            <span className="italic text-ink-subtle">"{msg.citation.quote}"</span>
+                          </div>
+                        )}
+                      </div>
+                    ))}
+
+                    {isThinking && (
+                      <div className="flex items-center gap-2 text-xs font-mono text-ink-muted p-2">
+                        <span className="w-2 h-2 rounded-full bg-accent-cyan animate-pulse"></span>
+                        <span>Retrieving verified document citations...</span>
+                      </div>
+                    )}
+                  </div>
+
+                  {/* Quick Probe Prompts */}
+                  <div className="px-3 py-2 border-t border-rule-border flex gap-2 overflow-x-auto text-[11px] font-mono">
+                    <button
+                      onClick={() => handleSendMessage('Why divide by √d_k instead of d_k?')}
+                      className="px-2.5 py-1 rounded-full border border-rule-border hover:border-accent-cyan bg-canvas text-ink-muted hover:text-ink-primary whitespace-nowrap transition-colors"
+                    >
+                      Why √d_k?
+                    </button>
+                    <button
+                      onClick={() => handleSendMessage('Compare O(1) path length vs RNNs.')}
+                      className="px-2.5 py-1 rounded-full border border-rule-border hover:border-accent-cyan bg-canvas text-ink-muted hover:text-ink-primary whitespace-nowrap transition-colors"
+                    >
+                      O(1) vs RNN
+                    </button>
+                  </div>
+
+                  {/* Input Form */}
+                  <form
+                    onSubmit={(e) => {
+                      e.preventDefault();
+                      handleSendMessage();
+                    }}
+                    className="p-3 border-t border-rule-border flex items-center gap-2"
                   >
-                    <Send className="w-3.5 h-3.5" />
-                  </button>
-                </form>
-              </div>
-            </div>
-          </div>
-        )}
-
-        {/* ========================================================= */}
-        {/* MODE 3: ACTIVE RECALL (Focused Spaced Repetition)          */}
-        {/* ========================================================= */}
-        {activeMode === 'recall' && (
-          <div className="max-w-xl mx-auto py-6">
-            {/* Progress & Deck Meta */}
-            <div className="flex items-center justify-between text-xs font-mono text-ink-muted mb-6">
-              <span className="flex items-center gap-1.5">
-                <RotateCcw className="w-3.5 h-3.5 text-accent-cyan" />
-                <span>Leitner Deck: {doc.title}</span>
-              </span>
-              <span>
-                Card {cardIndex + 1} of {FLASHCARD_DECK.length}
-              </span>
-            </div>
-
-            {/* 3D Flip Card */}
-            <div
-              onClick={() => setIsFlipped(!isFlipped)}
-              className="w-full min-h-[260px] p-8 rounded-xl bg-surface border border-rule-border hover:border-rule-strong cursor-pointer transition-all flex flex-col justify-between shadow-lg relative group"
-            >
-              <div>
-                <div className="flex items-center justify-between text-[11px] font-mono text-ink-muted mb-4">
-                  <span className="px-2 py-0.5 rounded bg-surface-elevated border border-rule-border">
-                    {isFlipped ? 'Answer & Proof' : 'Question'}
-                  </span>
-                  <span className="text-accent-cyan flex items-center gap-1">
-                    Click card to {isFlipped ? 'hide answer' : 'reveal answer'}
-                  </span>
-                </div>
-
-                <div className="text-base sm:text-lg font-medium text-ink-primary leading-relaxed">
-                  {isFlipped ? activeCard.answer : activeCard.question}
+                    <input
+                      type="text"
+                      value={inputQuery}
+                      onChange={(e) => setInputQuery(e.target.value)}
+                      placeholder="Ask a technical or mathematical question..."
+                      className="flex-1 bg-canvas border border-rule-border rounded-md px-3 py-2 text-xs text-ink-primary focus:outline-none focus:border-accent-cyan font-sans"
+                    />
+                    <button
+                      type="submit"
+                      disabled={!inputQuery.trim() || isThinking}
+                      className="p-2 rounded-md bg-accent-cyan text-slate-950 hover:bg-accent-cyan/90 disabled:opacity-40"
+                    >
+                      <Send className="w-3.5 h-3.5" />
+                    </button>
+                  </form>
                 </div>
               </div>
+            )}
 
-              {/* Source Provenance Citation */}
-              <div className="pt-4 border-t border-rule-border flex items-center justify-between text-xs font-mono text-ink-muted">
-                <span className="text-accent-emerald flex items-center gap-1">
-                  <ShieldCheck className="w-3.5 h-3.5" />
-                  {activeCard.citation}
-                </span>
-                <span>Box {activeCard.box} ({activeCard.interval})</span>
-              </div>
-            </div>
+            {/* --------------------------------------------------------- */}
+            {/* MODE 3: CONCEPT TREE & RELATIONSHIP HIERARCHY             */}
+            {/* --------------------------------------------------------- */}
+            {activeMode === 'diagram' && (
+              <div className="max-w-3xl mx-auto">
+                <div className="flex items-center justify-between pb-3 mb-6 border-b border-rule-border font-mono text-xs text-ink-muted">
+                  <span className="font-semibold text-ink-primary flex items-center gap-1.5">
+                    <Network className="w-3.5 h-3.5 text-accent-cyan" />
+                    Mermaid Concept DAG: Vaswani et al. Architecture
+                  </span>
+                  <span className="text-[11px] text-accent-cyan">Interactive Nodes</span>
+                </div>
 
-            {/* Leitner Spaced Repetition Grading */}
-            {isFlipped ? (
-              <div className="mt-6 flex items-center justify-between gap-3 font-mono text-xs animate-in fade-in duration-200">
-                <button
-                  onClick={() => {
-                    setIsFlipped(false);
-                    setCardIndex((prev) => (prev + 1) % FLASHCARD_DECK.length);
-                    setReviewedCount((c) => c + 1);
-                  }}
-                  className="flex-1 py-2.5 rounded-lg border border-red-500/30 bg-red-500/10 text-red-400 hover:bg-red-500/20 transition-all text-center"
-                >
-                  Again (1d)
-                </button>
-                <button
-                  onClick={() => {
-                    setIsFlipped(false);
-                    setCardIndex((prev) => (prev + 1) % FLASHCARD_DECK.length);
-                    setReviewedCount((c) => c + 1);
-                  }}
-                  className="flex-1 py-2.5 rounded-lg border border-amber-500/30 bg-amber-500/10 text-amber-400 hover:bg-amber-500/20 transition-all text-center"
-                >
-                  Hard (3d)
-                </button>
-                <button
-                  onClick={() => {
-                    setIsFlipped(false);
-                    setCardIndex((prev) => (prev + 1) % FLASHCARD_DECK.length);
-                    setReviewedCount((c) => c + 1);
-                  }}
-                  className="flex-1 py-2.5 rounded-lg border border-accent-cyan/30 bg-accent-cyan/10 text-accent-cyan hover:bg-accent-cyan/20 transition-all text-center"
-                >
-                  Good (6d)
-                </button>
-                <button
-                  onClick={() => {
-                    setIsFlipped(false);
-                    setCardIndex((prev) => (prev + 1) % FLASHCARD_DECK.length);
-                    setReviewedCount((c) => c + 1);
-                  }}
-                  className="flex-1 py-2.5 rounded-lg border border-accent-emerald/30 bg-accent-emerald/10 text-accent-emerald hover:bg-accent-emerald/20 transition-all text-center"
-                >
-                  Easy (14d)
-                </button>
+                {/* Visual Concept Flowchart Mockup */}
+                <div className="space-y-4">
+                  <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 font-mono text-xs">
+                    {/* Node 1 */}
+                    <button
+                      onClick={() => setActiveConceptNode('input')}
+                      className={`p-4 rounded-xl border text-left transition-all ${
+                        activeConceptNode === 'input'
+                          ? 'border-accent-cyan bg-accent-cyan/10 text-accent-cyan shadow-md'
+                          : 'border-rule-border bg-surface text-ink-muted hover:text-ink-primary'
+                      }`}
+                    >
+                      <div className="text-[10px] text-ink-muted uppercase mb-1">Layer 1</div>
+                      <div className="font-bold text-sm mb-1 text-ink-primary">Positional Encoding</div>
+                      <div className="text-[11px] leading-tight">Sinusoidal frequencies inject sequential order</div>
+                    </button>
+
+                    {/* Node 2 */}
+                    <button
+                      onClick={() => setActiveConceptNode('mha')}
+                      className={`p-4 rounded-xl border text-left transition-all ${
+                        activeConceptNode === 'mha'
+                          ? 'border-accent-cyan bg-accent-cyan/10 text-accent-cyan shadow-md'
+                          : 'border-rule-border bg-surface text-ink-muted hover:text-ink-primary'
+                      }`}
+                    >
+                      <div className="text-[10px] text-ink-muted uppercase mb-1">Layer 2 (Core)</div>
+                      <div className="font-bold text-sm mb-1 text-ink-primary">Multi-Head Attention</div>
+                      <div className="text-[11px] leading-tight">8 parallel subspace projections with √d_k scaling</div>
+                    </button>
+
+                    {/* Node 3 */}
+                    <button
+                      onClick={() => setActiveConceptNode('ffn')}
+                      className={`p-4 rounded-xl border text-left transition-all ${
+                        activeConceptNode === 'ffn'
+                          ? 'border-accent-cyan bg-accent-cyan/10 text-accent-cyan shadow-md'
+                          : 'border-rule-border bg-surface text-ink-muted hover:text-ink-primary'
+                      }`}
+                    >
+                      <div className="text-[10px] text-ink-muted uppercase mb-1">Layer 3</div>
+                      <div className="font-bold text-sm mb-1 text-ink-primary">Feed-Forward Network</div>
+                      <div className="text-[11px] leading-tight">Position-wise two-layer linear transformation</div>
+                    </button>
+                  </div>
+
+                  {/* Relationship Inspector Box */}
+                  <div className="p-5 rounded-xl border border-rule-border bg-surface font-mono text-xs">
+                    <div className="text-ink-muted text-[11px] mb-2 uppercase tracking-wider">
+                      Selected Relationship & Structural Verification:
+                    </div>
+                    {activeConceptNode === 'input' && (
+                      <div>
+                        <div className="font-bold text-ink-primary text-sm mb-1">
+                          Positional Encodings: PE(pos, 2i) = sin(pos/10000^(2i/d_model))
+                        </div>
+                        <p className="text-ink-body font-sans text-xs leading-relaxed mt-2">
+                          Because the model contains no recurrence and no convolution, for it to use the order of the sequence, we must inject information about relative or absolute positions.
+                        </p>
+                      </div>
+                    )}
+                    {activeConceptNode === 'mha' && (
+                      <div>
+                        <div className="font-bold text-ink-primary text-sm mb-1">
+                          Multi-Head Attention: Concat(head_1, ..., head_8)W^O
+                        </div>
+                        <p className="text-ink-body font-sans text-xs leading-relaxed mt-2">
+                          Multi-head attention allows the model to jointly attend to information from different representation subspaces. Each head linearly projects queries, keys, and values to d_k = 64 dimensions.
+                        </p>
+                      </div>
+                    )}
+                    {activeConceptNode === 'ffn' && (
+                      <div>
+                        <div className="font-bold text-ink-primary text-sm mb-1">
+                          Position-Wise FFN: max(0, xW_1 + b_1)W_2 + b_2
+                        </div>
+                        <p className="text-ink-body font-sans text-xs leading-relaxed mt-2">
+                          While the linear transformations are identical across different positions, they use different parameters from layer to layer. The inner-layer dimensionality is d_ff = 2048.
+                        </p>
+                      </div>
+                    )}
+                  </div>
+                </div>
               </div>
-            ) : (
-              <div className="mt-6 text-center text-xs font-mono text-ink-muted">
-                Press spacebar or click card to reveal answer
+            )}
+
+            {/* --------------------------------------------------------- */}
+            {/* MODE 4: ACTIVE RECALL (Leitner Flashcard Drill)           */}
+            {/* --------------------------------------------------------- */}
+            {activeMode === 'recall' && (
+              <div className="max-w-xl mx-auto py-4">
+                <div className="flex items-center justify-between text-xs font-mono text-ink-muted mb-4">
+                  <span className="flex items-center gap-1.5">
+                    <RotateCcw className="w-3.5 h-3.5 text-accent-cyan" />
+                    <span>Leitner Deck: {doc.title}</span>
+                  </span>
+                  <span>Card {cardIndex + 1} of {FLASHCARD_DECK.length}</span>
+                </div>
+
+                {/* 3D Flip Card */}
+                <div
+                  onClick={() => setIsFlipped(!isFlipped)}
+                  className="w-full min-h-[220px] p-6 rounded-xl bg-surface border border-rule-border hover:border-rule-strong cursor-pointer transition-all flex flex-col justify-between shadow-lg"
+                >
+                  <div>
+                    <div className="flex items-center justify-between text-[11px] font-mono text-ink-muted mb-3">
+                      <span className="px-2 py-0.5 rounded bg-surface-elevated border border-rule-border">
+                        {isFlipped ? 'Answer & Proof' : 'Active Recall Prompt'}
+                      </span>
+                      <span className="text-accent-cyan">Click to {isFlipped ? 'hide' : 'reveal'}</span>
+                    </div>
+                    <div className="text-base font-medium text-ink-primary leading-relaxed">
+                      {isFlipped ? activeCard.answer : activeCard.question}
+                    </div>
+                  </div>
+
+                  <div className="pt-3 border-t border-rule-border flex items-center justify-between text-xs font-mono text-ink-muted">
+                    <span className="text-accent-emerald flex items-center gap-1">
+                      <ShieldCheck className="w-3.5 h-3.5" />
+                      {activeCard.citation}
+                    </span>
+                    <span>Box {activeCard.box} ({activeCard.interval})</span>
+                  </div>
+                </div>
+
+                {/* Leitner Grading Buttons */}
+                {isFlipped ? (
+                  <div className="mt-4 flex items-center gap-2 font-mono text-xs">
+                    <button
+                      onClick={() => {
+                        setIsFlipped(false);
+                        setCardIndex((prev) => (prev + 1) % FLASHCARD_DECK.length);
+                      }}
+                      className="flex-1 py-2 rounded-lg border border-red-500/30 bg-red-500/10 text-red-400 hover:bg-red-500/20 text-center"
+                    >
+                      Again (1d)
+                    </button>
+                    <button
+                      onClick={() => {
+                        setIsFlipped(false);
+                        setCardIndex((prev) => (prev + 1) % FLASHCARD_DECK.length);
+                      }}
+                      className="flex-1 py-2 rounded-lg border border-amber-500/30 bg-amber-500/10 text-amber-400 hover:bg-amber-500/20 text-center"
+                    >
+                      Hard (3d)
+                    </button>
+                    <button
+                      onClick={() => {
+                        setIsFlipped(false);
+                        setCardIndex((prev) => (prev + 1) % FLASHCARD_DECK.length);
+                      }}
+                      className="flex-1 py-2 rounded-lg border border-accent-cyan/30 bg-accent-cyan/10 text-accent-cyan hover:bg-accent-cyan/20 text-center"
+                    >
+                      Good (6d)
+                    </button>
+                    <button
+                      onClick={() => {
+                        setIsFlipped(false);
+                        setCardIndex((prev) => (prev + 1) % FLASHCARD_DECK.length);
+                      }}
+                      className="flex-1 py-2 rounded-lg border border-accent-emerald/30 bg-accent-emerald/10 text-accent-emerald hover:bg-accent-emerald/20 text-center"
+                    >
+                      Easy (14d)
+                    </button>
+                  </div>
+                ) : (
+                  <div className="mt-4 text-center text-xs font-mono text-ink-muted">
+                    Click the card to reveal the answer and grade your retention
+                  </div>
+                )}
               </div>
             )}
           </div>
-        )}
-      </main>
+        </div>
+      </section>
+
+      {/* ========================================================= */}
+      {/* 4. FINAL CALL TO ACTION                                   */}
+      {/* ========================================================= */}
+      <section className="py-20 border-t border-rule-border bg-surface text-center">
+        <div className="max-w-3xl mx-auto px-4">
+          <h2 className="text-2xl sm:text-3xl font-bold text-ink-primary mb-3">
+            Ready for Rigorous, Distraction-Free Study?
+          </h2>
+          <p className="text-sm text-ink-body mb-8 max-w-xl mx-auto leading-relaxed">
+            Ingest your own research PDFs, YouTube lecture playlists, or technical topics and experience verifiable cognitive acceleration.
+          </p>
+
+          <div className="flex flex-wrap items-center justify-center gap-3 font-mono text-xs">
+            <button
+              onClick={handleQuickScholarPass}
+              disabled={isGeneratingPass}
+              className="px-6 py-3 rounded-lg bg-accent-cyan text-slate-950 font-bold hover:bg-accent-cyan/90 transition-all flex items-center gap-2 shadow-lg shadow-cyan-500/20"
+            >
+              <span>{isGeneratingPass ? 'Entering Studio...' : 'Launch Scholar Workspace'}</span>
+              <ArrowRight className="w-4 h-4" />
+            </button>
+
+            <button
+              onClick={() => setIsIngestOpen(true)}
+              className="px-6 py-3 rounded-lg border border-rule-border bg-surface-elevated hover:bg-canvas text-ink-primary font-semibold transition-all flex items-center gap-2"
+            >
+              <Upload className="w-4 h-4 text-accent-cyan" />
+              <span>Ingest Document</span>
+            </button>
+          </div>
+        </div>
+      </section>
 
       {/* ========================================================= */}
       {/* QUICK INGESTION MODAL                                     */}
@@ -764,7 +1076,6 @@ export default function ZenStudyStudioPage() {
               </button>
             </div>
 
-            {/* Type selector */}
             <div className="flex rounded-lg border border-rule-border p-1 bg-surface-elevated mb-4 text-xs font-mono">
               <button
                 type="button"
@@ -773,7 +1084,7 @@ export default function ZenStudyStudioPage() {
                   ingestType === 'pdf' ? 'bg-canvas text-accent-cyan font-medium' : 'text-ink-muted'
                 }`}
               >
-                PDF Paper
+                PDF
               </button>
               <button
                 type="button"
@@ -782,7 +1093,7 @@ export default function ZenStudyStudioPage() {
                   ingestType === 'arxiv' ? 'bg-canvas text-accent-cyan font-medium' : 'text-ink-muted'
                 }`}
               >
-                arXiv DOI
+                arXiv
               </button>
               <button
                 type="button"
@@ -791,7 +1102,16 @@ export default function ZenStudyStudioPage() {
                   ingestType === 'youtube' ? 'bg-canvas text-accent-cyan font-medium' : 'text-ink-muted'
                 }`}
               >
-                YouTube URL
+                YouTube
+              </button>
+              <button
+                type="button"
+                onClick={() => setIngestType('topic')}
+                className={`flex-1 py-1 rounded ${
+                  ingestType === 'topic' ? 'bg-canvas text-accent-cyan font-medium' : 'text-ink-muted'
+                }`}
+              >
+                Topic
               </button>
             </div>
 
@@ -800,24 +1120,22 @@ export default function ZenStudyStudioPage() {
                 <div className="border border-dashed border-rule-border rounded-lg p-6 text-center hover:border-accent-cyan cursor-pointer transition-colors bg-canvas">
                   <Upload className="w-6 h-6 text-accent-cyan mx-auto mb-2" />
                   <div className="text-xs text-ink-primary font-medium mb-1">
-                    Drag and drop your research PDF here
+                    Drag and drop research PDF
                   </div>
                   <div className="text-[11px] text-ink-muted font-mono">
-                    Up to 50MB · Automatic 1536-dim vector indexing
+                    1536-dim vector embeddings automatically generated
                   </div>
                 </div>
               )}
 
               {ingestType === 'arxiv' && (
                 <div>
-                  <label className="block text-xs font-mono text-ink-muted mb-1">
-                    arXiv DOI or URL
-                  </label>
+                  <label className="block text-xs font-mono text-ink-muted mb-1">arXiv DOI or URL</label>
                   <input
                     type="text"
                     value={ingestInput}
                     onChange={(e) => setIngestInput(e.target.value)}
-                    placeholder="e.g. 2501.12948 or https://arxiv.org/abs/2501.12948"
+                    placeholder="e.g. 2501.12948"
                     className="w-full bg-canvas border border-rule-border rounded-md px-3 py-2 text-xs text-ink-primary font-mono focus:outline-none focus:border-accent-cyan"
                   />
                 </div>
@@ -825,14 +1143,25 @@ export default function ZenStudyStudioPage() {
 
               {ingestType === 'youtube' && (
                 <div>
-                  <label className="block text-xs font-mono text-ink-muted mb-1">
-                    Academic Lecture URL
-                  </label>
+                  <label className="block text-xs font-mono text-ink-muted mb-1">Lecture Video URL</label>
                   <input
                     type="text"
                     value={ingestInput}
                     onChange={(e) => setIngestInput(e.target.value)}
                     placeholder="e.g. https://www.youtube.com/watch?v=..."
+                    className="w-full bg-canvas border border-rule-border rounded-md px-3 py-2 text-xs text-ink-primary font-mono focus:outline-none focus:border-accent-cyan"
+                  />
+                </div>
+              )}
+
+              {ingestType === 'topic' && (
+                <div>
+                  <label className="block text-xs font-mono text-ink-muted mb-1">Curated Study Topic</label>
+                  <input
+                    type="text"
+                    value={ingestInput}
+                    onChange={(e) => setIngestInput(e.target.value)}
+                    placeholder="e.g. Quantum Error Correction or RLHF"
                     className="w-full bg-canvas border border-rule-border rounded-md px-3 py-2 text-xs text-ink-primary font-mono focus:outline-none focus:border-accent-cyan"
                   />
                 </div>
@@ -849,9 +1178,9 @@ export default function ZenStudyStudioPage() {
                 <button
                   type="submit"
                   disabled={isIngesting}
-                  className="px-4 py-1.5 text-xs font-mono rounded-md bg-accent-cyan text-slate-950 font-semibold hover:bg-accent-cyan/90 transition-opacity"
+                  className="px-4 py-1.5 text-xs font-mono rounded-md bg-accent-cyan text-slate-950 font-semibold hover:bg-accent-cyan/90"
                 >
-                  {isIngesting ? 'Indexing Embeddings...' : 'Index & Open'}
+                  {isIngesting ? 'Indexing Embeddings...' : 'Index & Open Studio'}
                 </button>
               </div>
             </form>
@@ -865,13 +1194,12 @@ export default function ZenStudyStudioPage() {
       {isCommandOpen && (
         <div className="fixed inset-0 z-50 bg-black/60 backdrop-blur-sm flex items-start justify-center pt-20 p-4">
           <div className="bg-surface border border-rule-border rounded-xl max-w-lg w-full shadow-2xl overflow-hidden font-mono text-xs">
-            {/* Search Input */}
             <div className="flex items-center gap-2 px-4 py-3 border-b border-rule-border">
               <Search className="w-4 h-4 text-accent-cyan" />
               <input
                 type="text"
                 autoFocus
-                placeholder="Jump to section, formula, or study tool..."
+                placeholder="Jump to section, formula, or tool..."
                 className="flex-1 bg-transparent text-ink-primary focus:outline-none placeholder:text-ink-subtle"
               />
               <kbd className="px-1.5 py-0.5 rounded bg-surface-elevated border border-rule-border text-[10px] text-ink-muted">
@@ -879,7 +1207,6 @@ export default function ZenStudyStudioPage() {
               </kbd>
             </div>
 
-            {/* Quick Actions List */}
             <div className="p-2 space-y-1">
               <button
                 onClick={() => {
@@ -890,7 +1217,7 @@ export default function ZenStudyStudioPage() {
               >
                 <div className="flex items-center gap-2">
                   <BookOpen className="w-3.5 h-3.5 text-accent-cyan" />
-                  <span>Switch to Focus Read Mode</span>
+                  <span>1. Focus Read Mode</span>
                 </div>
                 <span className="text-[10px] text-ink-subtle">Mode</span>
               </button>
@@ -904,7 +1231,21 @@ export default function ZenStudyStudioPage() {
               >
                 <div className="flex items-center gap-2">
                   <MessageSquare className="w-3.5 h-3.5 text-accent-cyan" />
-                  <span>Open Grounded Socratic Tutor</span>
+                  <span>2. Socratic Interrogation</span>
+                </div>
+                <span className="text-[10px] text-ink-subtle">Mode</span>
+              </button>
+
+              <button
+                onClick={() => {
+                  setActiveMode('diagram');
+                  setIsCommandOpen(false);
+                }}
+                className="w-full text-left px-3 py-2 rounded-md hover:bg-surface-elevated flex items-center justify-between text-ink-muted hover:text-ink-primary"
+              >
+                <div className="flex items-center gap-2">
+                  <Network className="w-3.5 h-3.5 text-accent-cyan" />
+                  <span>3. Mermaid Concept Tree</span>
                 </div>
                 <span className="text-[10px] text-ink-subtle">Mode</span>
               </button>
@@ -918,23 +1259,9 @@ export default function ZenStudyStudioPage() {
               >
                 <div className="flex items-center gap-2">
                   <RotateCcw className="w-3.5 h-3.5 text-accent-cyan" />
-                  <span>Review Active Recall Flashcards</span>
+                  <span>4. Leitner Active Recall Flashcards</span>
                 </div>
-                <span className="text-[10px] text-ink-subtle">Leitner</span>
-              </button>
-
-              <button
-                onClick={() => {
-                  setIsIngestOpen(true);
-                  setIsCommandOpen(false);
-                }}
-                className="w-full text-left px-3 py-2 rounded-md hover:bg-surface-elevated flex items-center justify-between text-ink-muted hover:text-ink-primary"
-              >
-                <div className="flex items-center gap-2">
-                  <Upload className="w-3.5 h-3.5 text-accent-cyan" />
-                  <span>Ingest New Research Paper / Video</span>
-                </div>
-                <span className="text-[10px] text-ink-subtle">RAG</span>
+                <span className="text-[10px] text-ink-subtle">Mode</span>
               </button>
             </div>
           </div>

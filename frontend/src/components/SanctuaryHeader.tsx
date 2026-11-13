@@ -51,7 +51,12 @@ export function SanctuaryHeader({ onOpenCommandPalette }: { onOpenCommandPalette
 
         {/* Studio Center: Quick Command Palette Trigger */}
         <button
-          onClick={onOpenCommandPalette}
+          onClick={() => {
+            if (onOpenCommandPalette) onOpenCommandPalette();
+            if (typeof window !== 'undefined') {
+              window.dispatchEvent(new CustomEvent('open-command-palette'));
+            }
+          }}
           className="hidden sm:flex items-center gap-2 px-3 py-1.5 rounded-lg border border-rule-border bg-canvas hover:border-rule-strong text-ink-muted hover:text-ink-primary transition-all font-mono text-[11px]"
           title="Press Cmd+K to search"
         >
