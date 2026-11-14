@@ -24,6 +24,7 @@ public class StudySessionService {
     private final UserRepository userRepository;
     private final RagService ragService;
 
+    @Autowired
     public StudySessionService(
             StudySessionRepository sessionRepository,
             UserRepository userRepository,
