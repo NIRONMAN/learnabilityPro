@@ -14,7 +14,7 @@ export interface AuthResponse {
 export interface StudySession {
   id: string;
   userId: string;
-  title: string;
+  title?: string;
   sessionType: 'LEARN' | 'REVISE' | 'FLASHCARD' | 'DIAGRAM';
   contextType: 'PDF' | 'YOUTUBE' | 'TOPIC';
   sourceUrl?: string;

@@ -82,18 +82,39 @@ export default function DashboardPage() {
     setModalError(null);
 
     try {
+      const trimmedTitle = newTitle.trim();
+
       if (modalMode === 'PDF') {
         if (!selectedFile) throw new Error('Please select a PDF file to upload');
-        await api.uploadPdf(selectedFile);
+        const resolvedTitle =
+          trimmedTitle || (selectedFile.name ? selectedFile.name.replace(/\.pdf$/i, '').trim() : 'PDF Study Session');
+
+        if (trimmedTitle || sessionType !== 'LEARN') {
+          const created = await api.createSession({
+            title: resolvedTitle,
+            sessionType,
+            contextType: 'PDF',
+            sourceUrl: selectedFile.name,
+          });
+          await api.uploadPdf(selectedFile, created.id);
+        } else {
+          await api.uploadPdf(selectedFile);
+        }
       } else if (modalMode === 'YOUTUBE') {
-        if (!youtubeUrl) throw new Error('Please enter a valid YouTube URL');
-        await api.ingestYouTube({ url: youtubeUrl, title: newTitle });
+        if (!youtubeUrl.trim()) throw new Error('Please enter a valid YouTube URL');
+        const resolvedTitle = trimmedTitle || 'YouTube Study Session';
+        await api.ingestYouTube({ url: youtubeUrl.trim(), title: resolvedTitle });
       } else {
+        let resolvedTitle = trimmedTitle;
+        if (!resolvedTitle) {
+          const firstLine = contextText.trim().split('\n')[0]?.trim();
+          resolvedTitle = (firstLine ? firstLine.slice(0, 40).trim() : '') || 'Generalized Study Session';
+        }
         await api.createSession({
-          title: newTitle || 'Curated Study Session',
+          title: resolvedTitle,
           sessionType,
           contextType: 'TOPIC',
-          contextText,
+          contextText: contextText.trim() || undefined,
         });
       }
 
@@ -167,8 +188,9 @@ export default function DashboardPage() {
 
   const filteredSessions = sessions.filter((s) => {
     const matchesFilter = filterType === 'ALL' ? true : s.sessionType === filterType;
+    const titleText = s.title || '';
     const matchesSearch = searchQuery
-      ? s.title.toLowerCase().includes(searchQuery.toLowerCase()) ||
+      ? titleText.toLowerCase().includes(searchQuery.toLowerCase()) ||
         (s.contextText && s.contextText.toLowerCase().includes(searchQuery.toLowerCase()))
       : true;
     return matchesFilter && matchesSearch;
@@ -360,7 +382,7 @@ export default function DashboardPage() {
 
                 <div>
                   <h3 className="text-sm font-bold text-ink-primary group-hover:text-accent-cyan transition-colors line-clamp-2 leading-snug">
-                    {session.title}
+                    {session.title || 'Untitled Session'}
                   </h3>
                   <div className="flex items-center gap-1.5 text-[11px] font-mono text-ink-muted mt-2">
                     {session.contextType === 'PDF' ? (
@@ -449,7 +471,7 @@ export default function DashboardPage() {
                   modalMode === 'TOPIC' ? 'bg-canvas text-accent-cyan font-bold' : 'text-ink-muted'
                 }`}
               >
-                Curated Topic
+                Raw Notes / Topic
               </button>
               <button
                 type="button"
@@ -471,6 +493,16 @@ export default function DashboardPage() {
               </button>
             </div>
 
+            {/* In Raw Notes / Topic mode: helpful banner */}
+            {modalMode === 'TOPIC' && (
+              <div className="p-3 mb-4 rounded-lg bg-surface-elevated border border-rule-border text-xs text-ink-body leading-relaxed font-sans flex items-start gap-2">
+                <span className="shrink-0 text-sm">💡</span>
+                <span>
+                  Starting without notes will launch a generalized study chat using the tutor&apos;s broad knowledge base. If you include notes or references, the tutor will strictly treat them as the source of truth.
+                </span>
+              </div>
+            )}
+
             <form onSubmit={handleCreateSession} className="space-y-4">
               {modalError && (
                 <div className="p-2.5 rounded bg-red-500/10 border border-red-500/30 text-red-400 text-xs">
@@ -480,14 +512,13 @@ export default function DashboardPage() {
 
               <div>
                 <label className="block text-[11px] text-ink-muted mb-1 uppercase font-semibold">
-                  Sanctuary Title
+                  Sanctuary Title <span className="text-[10px] text-ink-subtle normal-case font-normal">(Optional)</span>
                 </label>
                 <input
                   type="text"
-                  required
                   value={newTitle}
                   onChange={(e) => setNewTitle(e.target.value)}
-                  placeholder="e.g. Attention Is All You Need or Quantum Computing..."
+                  placeholder="Auto-generated if left blank"
                   className="w-full bg-canvas border border-rule-border rounded-md px-3 py-2 text-xs text-ink-primary focus:outline-none focus:border-accent-cyan"
                 />
               </div>
@@ -536,10 +567,11 @@ export default function DashboardPage() {
               {modalMode === 'PDF' && (
                 <div>
                   <label className="block text-[11px] text-ink-muted mb-1 uppercase font-semibold">
-                    Upload Research PDF
+                    Upload Research PDF <span className="text-red-400">*</span>
                   </label>
                   <input
                     type="file"
+                    required
                     accept=".pdf"
                     onChange={(e) => setSelectedFile(e.target.files?.[0] || null)}
                     className="w-full text-xs text-ink-muted file:mr-3 file:py-1.5 file:px-3 file:rounded file:border file:border-rule-border file:bg-surface-elevated file:text-ink-primary cursor-pointer"
@@ -550,10 +582,11 @@ export default function DashboardPage() {
               {modalMode === 'YOUTUBE' && (
                 <div>
                   <label className="block text-[11px] text-ink-muted mb-1 uppercase font-semibold">
-                    YouTube Lecture URL
+                    YouTube Lecture URL <span className="text-red-400">*</span>
                   </label>
                   <input
                     type="url"
+                    required
                     value={youtubeUrl}
                     onChange={(e) => setYoutubeUrl(e.target.value)}
                     placeholder="https://www.youtube.com/watch?v=..."
@@ -564,13 +597,17 @@ export default function DashboardPage() {
 
               <div>
                 <label className="block text-[11px] text-ink-muted mb-1 uppercase font-semibold">
-                  Source Notes or Excerpt
+                  {modalMode === 'TOPIC' ? 'Notes or Excerpt (Optional)' : 'Source Notes or Excerpt'}
                 </label>
                 <textarea
                   rows={3}
                   value={contextText}
                   onChange={(e) => setContextText(e.target.value)}
-                  placeholder="Paste mathematical formulas, excerpts, or syllabus guidelines..."
+                  placeholder={
+                    modalMode === 'TOPIC'
+                      ? 'Paste notes, formulas, or leave blank to study with open knowledge base...'
+                      : 'Paste mathematical formulas, excerpts, or syllabus guidelines...'
+                  }
                   className="w-full bg-canvas border border-rule-border rounded-md px-3 py-2 text-xs text-ink-primary focus:outline-none focus:border-accent-cyan font-sans"
                 />
               </div>
