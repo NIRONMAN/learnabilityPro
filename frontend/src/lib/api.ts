@@ -138,8 +138,15 @@ export const api = {
 
   // Chat
   getMessages: (sessionId: string) => request<ChatMessage[]>(`/chat/${sessionId}/messages`),
-  sendMessage: (sessionId: string, message: string) =>
-    request<ChatMessage>(`/chat/${sessionId}/send`, { method: 'POST', body: JSON.stringify({ message }) }),
+  sendMessage: (
+    sessionId: string,
+    message: string,
+    options?: { videoTimestampSec?: number; playbackContext?: string }
+  ) =>
+    request<ChatMessage>(`/chat/${sessionId}/send`, {
+      method: 'POST',
+      body: JSON.stringify({ message, ...options }),
+    }),
 
   // Streaming Chat via SSE
   streamChat: async (
@@ -147,10 +154,17 @@ export const api = {
     message: string,
     onChunk: (chunk: string) => void,
     onComplete: () => void,
-    onError: (err: any) => void
+    onError: (err: any) => void,
+    options?: { videoTimestampSec?: number; playbackContext?: string }
   ) => {
     const token = authStorage.getToken();
-    const url = `${API_BASE}/chat/${sessionId}/stream?message=${encodeURIComponent(message)}${token ? `&token=${token}` : ''}`;
+    let url = `${API_BASE}/chat/${sessionId}/stream?message=${encodeURIComponent(message)}${token ? `&token=${token}` : ''}`;
+    if (options?.videoTimestampSec !== undefined && options.videoTimestampSec !== null) {
+      url += `&videoTimestampSec=${encodeURIComponent(options.videoTimestampSec)}`;
+    }
+    if (options?.playbackContext) {
+      url += `&playbackContext=${encodeURIComponent(options.playbackContext)}`;
+    }
     
     try {
       const response = await fetch(url, {

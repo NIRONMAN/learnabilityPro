@@ -34,7 +34,13 @@ public class ChatController {
             @PathVariable UUID sessionId,
             @AuthenticationPrincipal UserPrincipal principal,
             @Valid @RequestBody ChatRequest request) {
-        return ResponseEntity.ok(chatService.sendMessage(sessionId, principal.getId(), request.message()));
+        return ResponseEntity.ok(chatService.sendMessage(
+                sessionId,
+                principal.getId(),
+                request.message(),
+                request.videoTimestampSec(),
+                request.playbackContext()
+        ));
     }
 
     @GetMapping(value = "/{sessionId}/stream", produces = MediaType.TEXT_EVENT_STREAM_VALUE)
@@ -42,8 +48,10 @@ public class ChatController {
     public Flux<ServerSentEvent<String>> streamMessage(
             @PathVariable UUID sessionId,
             @RequestParam String message,
+            @RequestParam(required = false) Integer videoTimestampSec,
+            @RequestParam(required = false) String playbackContext,
             @AuthenticationPrincipal UserPrincipal principal) {
-        return chatService.streamMessage(sessionId, principal.getId(), message)
+        return chatService.streamMessage(sessionId, principal.getId(), message, videoTimestampSec, playbackContext)
                 .map(chunk -> ServerSentEvent.<String>builder()
                         .data(chunk)
                         .event("message")

@@ -23,7 +23,10 @@ export function MarkdownRenderer({ content, className = '', onTimestampClick }: 
     if (!content) return '';
     let res = content.replace(/\\\\([a-zA-Z{}()[\]|\\_,!#^])/g, '\\$1');
     if (onTimestampClick) {
-      res = res.replace(/\[(\d{1,2}:\d{2})\]/g, '[$1](#timestamp-$1)');
+      res = res.replace(/\[(?:(\d{1,2}):)?(\d{1,2}):(\d{2})\]/g, (match, h, m, s) => {
+        const ts = h ? `${h}:${m}:${s}` : `${m}:${s}`;
+        return `[${ts}](#timestamp-${ts})`;
+      });
     }
     return res;
   }, [content, onTimestampClick]);
@@ -93,7 +96,7 @@ export function MarkdownRenderer({ content, className = '', onTimestampClick }: 
             if (href?.startsWith('#timestamp-')) {
               const ts = href.replace('#timestamp-', '');
               const parts = ts.split(':').map(Number);
-              const sec = parts[0] * 60 + parts[1];
+              const sec = parts.length === 3 ? parts[0] * 3600 + parts[1] * 60 + parts[2] : parts[0] * 60 + parts[1];
               return (
                 <button
                   type="button"

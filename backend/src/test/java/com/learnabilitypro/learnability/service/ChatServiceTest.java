@@ -181,4 +181,29 @@ class ChatServiceTest {
         assertThat(streamFlux).isNotNull();
         verify(ragService, times(1)).createSessionAdvisor(sessionId);
     }
+
+    @Test
+    void buildSystemPromptWithVideoTimestampIncludesSpokenExcerptAndInstructions() {
+        String lectureTranscript = """
+                [00:00] Welcome to this container performance workshop.
+                [00:15] Ciri runs containers up to eight times faster than standard daemons.
+                [00:30] It uses a minimal hypervisor and shuts down after sixty seconds of inactivity.
+                """;
+
+        StudySession session = StudySession.builder()
+                .id(sessionId)
+                .title("Container Architecture")
+                .sessionType(SessionType.LEARN)
+                .contextType(ContextType.YOUTUBE)
+                .contextText(lectureTranscript)
+                .build();
+
+        String prompt = chatService.buildSystemPrompt(session, 18, null);
+
+        assertThat(prompt).contains("=== CURRENT REAL-TIME VIDEO PLAYBACK CONTEXT ===");
+        assertThat(prompt).contains("[00:18]");
+        assertThat(prompt).contains("Ciri runs containers up to eight times faster");
+        assertThat(prompt).contains("what did he just say?");
+    }
 }
+

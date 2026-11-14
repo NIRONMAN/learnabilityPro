@@ -58,6 +58,14 @@ export default function LearnWorkspacePage() {
   const [layoutMode, setLayoutMode] = useState<'split' | 'chat' | 'material'>('split');
   const [hasPdfFile, setHasPdfFile] = useState<boolean>(false);
   const [youtubeStartSec, setYoutubeStartSec] = useState<number | null>(null);
+  const [videoPlayback, setVideoPlayback] = useState<{
+    currentTime: number;
+    isPaused: boolean;
+    currentDialogue?: string;
+  }>({
+    currentTime: 0,
+    isPaused: true,
+  });
   const [isSessionsDrawerOpen, setIsSessionsDrawerOpen] = useState(false);
 
   // Smart scrolling state
@@ -247,7 +255,13 @@ export default function LearnWorkspacePage() {
           setIsStreaming(false);
           setStreamingResponse('');
           setStreamError(err.message || 'Stream connection interrupted. Please try again.');
-        }
+        },
+        session?.contextType === 'YOUTUBE' && videoPlayback.currentTime > 0
+          ? {
+              videoTimestampSec: videoPlayback.currentTime,
+              playbackContext: videoPlayback.currentDialogue,
+            }
+          : undefined
       );
     } catch (err: any) {
       setIsStreaming(false);
@@ -561,6 +575,9 @@ export default function LearnWorkspacePage() {
               onAskTutor={handleAskTutorFromSelection}
               youtubeStartSec={youtubeStartSec}
               onSeekVideo={handleSeekVideo}
+              onPlaybackChange={(sec, isPaused, currentDialogue) =>
+                setVideoPlayback({ currentTime: sec, isPaused, currentDialogue })
+              }
               onClose={layoutMode === 'material' ? () => setLayoutMode('split') : undefined}
             />
           </div>
@@ -766,6 +783,38 @@ export default function LearnWorkspacePage() {
             {/* ======================================================= */}
             <div className="p-3 sm:p-4 border-t border-rule-border bg-surface shrink-0">
               <div className="max-w-3xl mx-auto">
+                {/* Real-time Video Playback Paused Awareness Banner */}
+                {session?.contextType === 'YOUTUBE' && videoPlayback.currentTime > 0 && videoPlayback.isPaused && (
+                  <div className="flex items-center justify-between px-3 py-1.5 rounded-xl bg-surface-elevated border border-accent-cyan/35 text-xs mb-2.5 transition-all shadow-xs animate-in fade-in duration-200">
+                    <div className="flex items-center gap-2 min-w-0">
+                      <span className="w-2 h-2 rounded-full bg-amber-400 animate-pulse shrink-0" />
+                      <span className="font-mono text-[11px] font-bold text-ink-primary">
+                        Video paused at [{Math.floor(videoPlayback.currentTime / 60).toString().padStart(2, '0')}:{(videoPlayback.currentTime % 60).toString().padStart(2, '0')}]
+                      </span>
+                      {videoPlayback.currentDialogue && (
+                        <span className="text-[11px] text-ink-muted truncate font-sans max-w-[200px] sm:max-w-xs hidden sm:inline">
+                          &ldquo;{videoPlayback.currentDialogue}&rdquo;
+                        </span>
+                      )}
+                    </div>
+                    <button
+                      type="button"
+                      disabled={isStreaming}
+                      onClick={() => {
+                        const m = Math.floor(videoPlayback.currentTime / 60).toString().padStart(2, '0');
+                        const s = (videoPlayback.currentTime % 60).toString().padStart(2, '0');
+                        handleSendMessage(
+                          `What did the speaker just say at [${m}:${s}]${videoPlayback.currentDialogue ? ` ("${videoPlayback.currentDialogue}")` : ''}? Can you break down the concept clearly?`
+                        );
+                      }}
+                      className="px-2.5 py-1 rounded-md bg-accent-cyan text-slate-950 text-[11px] font-bold hover:bg-accent-cyan/90 transition-all flex items-center gap-1.5 cursor-pointer shrink-0 shadow-xs disabled:opacity-50"
+                    >
+                      <Sparkles className="w-3 h-3 fill-slate-950" />
+                      <span>What did he just say?</span>
+                    </button>
+                  </div>
+                )}
+
                 <form
                   onSubmit={(e) => {
                     e.preventDefault();

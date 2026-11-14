@@ -362,4 +362,27 @@ public class StudySessionService {
             sessionRepository.save(session);
         });
     }
+
+    @Transactional
+    public void setSessionContext(UUID sessionId, String title, String contextText) {
+        sessionRepository.findById(sessionId).ifPresent(session -> {
+            if (title != null && !title.isBlank()) {
+                session.setTitle(title);
+            }
+            if (contextText != null) {
+                session.setContextText(contextText);
+            }
+            sessionRepository.save(session);
+        });
+    }
+
+    @Transactional
+    public void updateSessionTitle(UUID sessionId, String title) {
+        if (title == null || title.isBlank()) return;
+        sessionRepository.findById(sessionId).ifPresent(session -> {
+            session.setTitle(title);
+            sessionRepository.save(session);
+        });
+    }
 }
+

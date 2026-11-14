@@ -113,7 +113,7 @@ export default function DashboardPage() {
         }
       } else if (modalMode === 'YOUTUBE') {
         if (!youtubeUrl.trim()) throw new Error('Please enter a valid YouTube URL');
-        const resolvedTitle = trimmedTitle || 'YouTube Study Session';
+        const resolvedTitle = trimmedTitle || undefined;
         const res = await api.ingestYouTube({ url: youtubeUrl.trim(), title: resolvedTitle });
         createdSessionId = res.sessionId;
       } else {
