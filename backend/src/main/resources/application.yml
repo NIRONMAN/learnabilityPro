@@ -34,9 +34,17 @@ spring:
           options:
             model: ${GEMINI_CHAT_MODEL:gemini-flash-lite-latest}
         embedding:
+          project-id: ${GEMINI_PROJECT_ID:learnability-pro-dev}
           api-key: ${GEMINI_API_KEY:mock-key-for-development}
+          text:
+            model: ${GEMINI_EMBEDDING_MODEL:gemini-embedding-001}
+            dimensions: ${GEMINI_EMBEDDING_DIMENSIONS:768}
+            options:
+              model: ${GEMINI_EMBEDDING_MODEL:gemini-embedding-001}
+              dimensions: ${GEMINI_EMBEDDING_DIMENSIONS:768}
           options:
             model: ${GEMINI_EMBEDDING_MODEL:gemini-embedding-001}
+            dimensions: ${GEMINI_EMBEDDING_DIMENSIONS:768}
     vectorstore:
       pgvector:
         table-name: vector_store

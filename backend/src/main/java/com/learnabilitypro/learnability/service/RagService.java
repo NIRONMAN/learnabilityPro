@@ -28,7 +28,7 @@ public class RagService {
     public QuestionAnswerAdvisor createSessionAdvisor(UUID sessionId) {
         SearchRequest searchRequest = SearchRequest.builder()
                 .topK(4)
-                .similarityThreshold(0.65)
+                .similarityThreshold(0.30)
                 .filterExpression("sessionId == '" + sessionId + "'")
                 .build();
 
@@ -42,7 +42,7 @@ public class RagService {
             SearchRequest searchRequest = SearchRequest.builder()
                     .query(query)
                     .topK(4)
-                    .similarityThreshold(0.60)
+                    .similarityThreshold(0.30)
                     .filterExpression("sessionId == '" + sessionId + "'")
                     .build();
 

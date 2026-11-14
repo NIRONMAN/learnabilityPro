@@ -56,11 +56,18 @@ public class PdfIngestionService {
         PagePdfDocumentReader pdfReader = new PagePdfDocumentReader(resource);
         List<Document> rawDocuments = pdfReader.get();
 
+        if (rawDocuments == null || rawDocuments.isEmpty() || rawDocuments.stream().allMatch(d -> d.getText() == null || d.getText().isBlank())) {
+            throw new IllegalArgumentException("The uploaded PDF does not contain extractable text. Please ensure it is not an image-only scanned document without an OCR layer.");
+        }
+
         TokenTextSplitter splitter = TokenTextSplitter.builder()
                 .withChunkSize(800)
                 .withMinChunkSizeChars(350)
                 .build();
         List<Document> splitDocuments = splitter.apply(rawDocuments);
+        if (splitDocuments == null || splitDocuments.isEmpty()) {
+            splitDocuments = rawDocuments.stream().filter(d -> d.getText() != null && !d.getText().isBlank()).toList();
+        }
 
         StudySession session;
         if (sessionId != null) {

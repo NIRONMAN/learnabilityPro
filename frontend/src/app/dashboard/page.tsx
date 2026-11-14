@@ -97,18 +97,19 @@ export default function DashboardPage() {
         const resolvedTitle =
           trimmedTitle || (selectedFile.name ? selectedFile.name.replace(/\.pdf$/i, '').trim() : 'PDF Study Session');
 
-        if (trimmedTitle || sessionType !== 'LEARN') {
-          const created = await api.createSession({
-            title: resolvedTitle,
-            sessionType,
-            contextType: 'PDF',
-            sourceUrl: selectedFile.name,
-          });
-          createdSessionId = created.id;
+        const created = await api.createSession({
+          title: resolvedTitle,
+          sessionType,
+          contextType: 'PDF',
+          sourceUrl: selectedFile.name,
+          contextText: contextText.trim() || undefined,
+        });
+        createdSessionId = created.id;
+        try {
           await api.uploadPdf(selectedFile, created.id);
-        } else {
-          const res = await api.uploadPdf(selectedFile);
-          createdSessionId = res.sessionId;
+        } catch (uploadErr) {
+          await api.deleteSession(created.id).catch(() => {});
+          throw uploadErr;
         }
       } else if (modalMode === 'YOUTUBE') {
         if (!youtubeUrl.trim()) throw new Error('Please enter a valid YouTube URL');
