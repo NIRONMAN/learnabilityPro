@@ -118,7 +118,8 @@ public class YouTubeTranscriptService {
         ragService.addDocuments(chunks);
 
         String summary = summarizeTranscript(sessionTitle, transcriptText);
-        sessionService.appendContextText(sessionId, "YouTube Video: " + request.url() + "\n" + summary);
+        String combined = "YouTube Video: " + request.url() + "\n\n### Lecture Summary\n" + summary + "\n\n### Lecture Transcript\n\n" + transcriptText;
+        sessionService.appendContextText(sessionId, combined);
 
         return new IngestResponse(
                 sessionId,
@@ -163,7 +164,24 @@ public class YouTubeTranscriptService {
                 StringBuilder transcriptBuilder = new StringBuilder();
 
                 for (Element el : textElements) {
-                    transcriptBuilder.append(el.text()).append(" ");
+                    String startStr = el.attr("start");
+                    String text = el.text().trim();
+                    if (!text.isEmpty()) {
+                        if (!startStr.isEmpty()) {
+                            try {
+                                double startSeconds = Double.parseDouble(startStr);
+                                int totalSec = (int) startSeconds;
+                                int min = totalSec / 60;
+                                int sec = totalSec % 60;
+                                String timestamp = String.format("[%02d:%02d]", min, sec);
+                                transcriptBuilder.append(timestamp).append(" ").append(text).append("\n");
+                            } catch (Exception ignored) {
+                                transcriptBuilder.append(text).append(" ");
+                            }
+                        } else {
+                            transcriptBuilder.append(text).append(" ");
+                        }
+                    }
                 }
                 return transcriptBuilder.toString().trim();
             }

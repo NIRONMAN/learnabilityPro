@@ -42,3 +42,7 @@ Thumbs.db
 
 # Agent state
 .agent/
+
+# File uploads
+backend/uploads/
+uploads/

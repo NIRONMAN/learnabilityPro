@@ -9,6 +9,7 @@ import rehypeKatex from 'rehype-katex';
 export interface MarkdownRendererProps {
   content: string;
   className?: string;
+  onTimestampClick?: (seconds: number) => void;
 }
 
 /**
@@ -16,12 +17,16 @@ export interface MarkdownRendererProps {
  * Safely renders GitHub Flavored Markdown (GFM) and LaTeX equations using react-markdown, remark-math, and KaTeX.
  * Verified compatible with Next.js 15 and React 19.
  */
-export function MarkdownRenderer({ content, className = '' }: MarkdownRendererProps) {
+export function MarkdownRenderer({ content, className = '', onTimestampClick }: MarkdownRendererProps) {
   // Normalize double-escaped backslashes in LaTeX expressions streamed from JSON/SSE
   const formattedContent = React.useMemo(() => {
     if (!content) return '';
-    return content.replace(/\\\\([a-zA-Z{}()[\]|\\_,!#^])/g, '\\$1');
-  }, [content]);
+    let res = content.replace(/\\\\([a-zA-Z{}()[\]|\\_,!#^])/g, '\\$1');
+    if (onTimestampClick) {
+      res = res.replace(/\[(\d{1,2}:\d{2})\]/g, '[$1](#timestamp-$1)');
+    }
+    return res;
+  }, [content, onTimestampClick]);
 
   return (
     <div className={`prose prose-invert max-w-none text-xs leading-relaxed space-y-2 ${className}`}>
@@ -83,8 +88,27 @@ export function MarkdownRenderer({ content, className = '' }: MarkdownRendererPr
               </td>
             );
           },
-          // Custom styled links
+          // Custom styled links and timestamps
           a({ href, children, ...props }) {
+            if (href?.startsWith('#timestamp-')) {
+              const ts = href.replace('#timestamp-', '');
+              const parts = ts.split(':').map(Number);
+              const sec = parts[0] * 60 + parts[1];
+              return (
+                <button
+                  type="button"
+                  onClick={(e) => {
+                    e.preventDefault();
+                    onTimestampClick?.(sec);
+                  }}
+                  className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] font-mono font-semibold bg-accent-cyan/15 text-accent-cyan border border-accent-cyan/30 hover:bg-accent-cyan/25 cursor-pointer mx-0.5 align-baseline transition-colors"
+                  title={`Jump video to ${ts}`}
+                >
+                  <span className="w-1.5 h-1.5 rounded-full bg-accent-cyan animate-pulse"></span>
+                  <span>{ts}</span>
+                </button>
+              );
+            }
             return (
               <a
                 href={href}

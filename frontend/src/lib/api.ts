@@ -247,4 +247,10 @@ export const api = {
   },
   ingestYouTube: (data: { url: string; title?: string; sessionId?: string }) =>
     request<IngestResponse>('/ingest/youtube', { method: 'POST', body: JSON.stringify(data) }),
+  checkPdfStatus: (sessionId: string) =>
+    request<{ hasPdf: boolean; sessionId: string }>(`/ingest/pdf/${sessionId}/status`),
+  getPdfUrl: (sessionId: string) => {
+    const token = authStorage.getToken();
+    return `${API_BASE}/ingest/pdf/${sessionId}${token ? `?token=${encodeURIComponent(token)}` : ''}`;
+  },
 };

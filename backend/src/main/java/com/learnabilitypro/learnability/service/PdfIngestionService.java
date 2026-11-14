@@ -18,6 +18,10 @@ import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.multipart.MultipartFile;
 
 import java.io.IOException;
+import java.nio.file.Files;
+import java.nio.file.Path;
+import java.nio.file.Paths;
+import java.nio.file.StandardOpenOption;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.UUID;
@@ -87,8 +91,22 @@ public class PdfIngestionService {
             sessionId = session.getId();
         }
 
+        Path uploadDir = java.nio.file.Paths.get("uploads", "pdfs");
+        java.nio.file.Files.createDirectories(uploadDir);
+        java.nio.file.Path targetPath = uploadDir.resolve(sessionId.toString() + ".pdf");
+        java.nio.file.Files.write(targetPath, file.getBytes(), java.nio.file.StandardOpenOption.CREATE, java.nio.file.StandardOpenOption.TRUNCATE_EXISTING);
+
         List<Document> taggedDocuments = new ArrayList<>();
         StringBuilder combinedSample = new StringBuilder();
+        StringBuilder fullExtracted = new StringBuilder();
+
+        for (int i = 0; i < rawDocuments.size(); i++) {
+            Document page = rawDocuments.get(i);
+            if (page.getText() != null && !page.getText().isBlank()) {
+                fullExtracted.append("### Page ").append(i + 1).append("\n\n")
+                        .append(page.getText().trim()).append("\n\n");
+            }
+        }
 
         for (Document doc : splitDocuments) {
             doc.getMetadata().put("sessionId", sessionId.toString());
@@ -104,7 +122,11 @@ public class PdfIngestionService {
         ragService.addDocuments(taggedDocuments);
 
         String summary = generateQuickSummary(filename, combinedSample.toString());
-        sessionService.appendContextText(sessionId, "Document: " + filename + "\n" + summary);
+        String documentContent = "Document: " + filename + "\n\n### Summary\n" + summary;
+        if (!fullExtracted.isEmpty()) {
+            documentContent += "\n\n### Extracted Document Content\n\n" + fullExtracted.toString().trim();
+        }
+        sessionService.appendContextText(sessionId, documentContent);
 
         return new IngestResponse(
                 sessionId,
@@ -112,6 +134,20 @@ public class PdfIngestionService {
                 taggedDocuments.size(),
                 summary
         );
+    }
+
+    public Resource getPdfResource(UUID sessionId, UUID userId) {
+        sessionService.getSessionEntity(sessionId, userId);
+        java.nio.file.Path filePath = java.nio.file.Paths.get("uploads", "pdfs", sessionId.toString() + ".pdf");
+        if (!java.nio.file.Files.exists(filePath)) {
+            return null;
+        }
+        return new org.springframework.core.io.FileSystemResource(filePath);
+    }
+
+    public boolean hasPdfFile(UUID sessionId) {
+        java.nio.file.Path filePath = java.nio.file.Paths.get("uploads", "pdfs", sessionId.toString() + ".pdf");
+        return java.nio.file.Files.exists(filePath);
     }
 
     private String generateQuickSummary(String filename, String sampleText) {

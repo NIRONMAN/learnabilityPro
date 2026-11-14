@@ -198,6 +198,7 @@ public class ChatService {
 
         if (session.getContextText() != null && !session.getContextText().isBlank()) {
             sb.append("\nThe user has provided reference study material below. Treat this material strictly as your primary source of truth when answering questions, citing definitions and concepts directly from it.\n");
+            sb.append("When explaining concepts, include grounded citations to specific sections, equations, or timestamps when available (e.g., `[§ 3.2]`, `[Page 2]`, `[04:15]`) so the student can trace every statement back to the source material.\n");
             sb.append("\nReference Study Material:\n");
             sb.append(session.getContextText()).append("\n");
         } else {
