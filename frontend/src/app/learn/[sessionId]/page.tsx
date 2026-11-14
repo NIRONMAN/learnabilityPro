@@ -295,25 +295,51 @@ export default function LearnWorkspacePage() {
       .trim()
       .slice(0, 26) || 'this topic';
 
+  const getSuggestionLabel = (prompt: string): string => {
+    const p = prompt.trim();
+    if (/technical proficiencies|career highlights/i.test(p)) return 'Technical Proficiencies';
+    if (/engineering achievements|impact metrics/i.test(p)) return 'Key Engineering Achievements';
+    if (/interview questions/i.test(p)) return 'Interview Prep Questions';
+    if (/architectural patterns|system components/i.test(p)) return 'System Architecture';
+    if (/scalability considerations|trade-offs/i.test(p)) return 'Trade-offs & Scalability';
+    if (/data pipelines|services and data/i.test(p)) return 'Data Flow & Services';
+    if (/mathematical derivation/i.test(p)) return 'Mathematical Derivation';
+    if (/core trade-offs and complexity/i.test(p)) return 'Complexity & Trade-offs';
+    if (/proof or justification/i.test(p)) return 'Formula Proof & Intuition';
+    if (/research hypothesis|main contributions/i.test(p)) return 'Core Contributions';
+    if (/experimental methodology|empirical results/i.test(p)) return 'Empirical Methodology';
+    if (/limitations and potential avenues/i.test(p)) return 'Limitations & Future Work';
+    if (/foundational principles/i.test(p)) return 'Foundational Principles';
+    if (/real-world example/i.test(p)) return 'Real-World Example';
+    if (/common misconceptions/i.test(p)) return 'Common Misconceptions';
+    if (/core arguments and central concepts/i.test(p)) return 'Core Concepts';
+    if (/terminology and definitions/i.test(p)) return 'Key Terminology';
+    if (/active recall/i.test(p)) return 'Active Recall Test';
+
+    if (p.length <= 40) return p;
+    const sliced = p.slice(0, 38);
+    const lastSpace = sliced.lastIndexOf(' ');
+    return (lastSpace > 18 ? sliced.slice(0, lastSpace) : sliced).trim() + '…';
+  };
+
   const dynamicSuggestions: Array<{ label: string; prompt: string }> =
     session.suggestedQuestions && session.suggestedQuestions.length > 0
-      ? session.suggestedQuestions.map((q) => {
-          const trimmed = q.trim();
-          const label = trimmed.length > 38 ? `${trimmed.slice(0, 36).trim()}…` : trimmed;
-          return { label, prompt: q };
-        })
+      ? session.suggestedQuestions.map((q) => ({
+          label: getSuggestionLabel(q),
+          prompt: q.trim(),
+        }))
       : [
           {
             label: `Key principles of ${shortTitle}`,
             prompt: `What are the key foundational principles of ${shortTitle}?`,
           },
           {
-            label: 'Step-by-step proof/derivation',
-            prompt: `Can you walk me through a clear, rigorous mathematical or logical derivation of ${shortTitle}?`,
+            label: 'Core concepts & breakdown',
+            prompt: `Can you break down the core concepts and central ideas in ${shortTitle}?`,
           },
           {
             label: 'Test my comprehension',
-            prompt: `Test my understanding with a challenging conceptual question about ${shortTitle}.`,
+            prompt: `Test my understanding with challenging active recall questions about ${shortTitle}.`,
           },
         ];
 
@@ -563,7 +589,7 @@ export default function LearnWorkspacePage() {
                         Socratic Study Sanctuary Active
                       </h3>
                       <p className="text-xs text-ink-muted max-w-md font-sans leading-relaxed">
-                        Deep-dive into &quot;{sessionTitle}&quot;. Ask for rigorous mathematical proofs, conceptual derivations, or cite excerpts from your source material on the left.
+                        Deep-dive into &quot;{sessionTitle}&quot;. Explore foundational principles, technical concepts, or cite excerpts from your source material on the left.
                       </p>
                     </div>
 
@@ -574,10 +600,14 @@ export default function LearnWorkspacePage() {
                           key={idx}
                           type="button"
                           onClick={() => handleSendMessage(item.prompt)}
-                          className="p-3 rounded-xl border border-rule-border bg-surface hover:border-accent-cyan hover:bg-surface-elevated text-xs font-sans text-ink-primary transition-all text-left flex items-start gap-2 group cursor-pointer shadow-xs"
+                          className="p-3 rounded-xl border border-rule-border bg-surface hover:border-accent-cyan hover:bg-surface-elevated text-xs font-sans text-ink-primary transition-all text-left flex items-start gap-2.5 group cursor-pointer shadow-xs"
+                          title={item.prompt}
                         >
                           <Sparkles className="w-3.5 h-3.5 text-accent-cyan mt-0.5 shrink-0 group-hover:scale-110 transition-transform" />
-                          <span className="leading-snug">{item.label}</span>
+                          <div className="flex flex-col gap-0.5 min-w-0">
+                            <span className="font-semibold text-ink-primary text-xs leading-snug">{item.label}</span>
+                            <span className="text-[11px] text-ink-muted line-clamp-2 leading-snug font-sans">{item.prompt}</span>
+                          </div>
                         </button>
                       ))}
                     </div>

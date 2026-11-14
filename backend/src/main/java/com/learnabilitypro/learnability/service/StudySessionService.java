@@ -101,9 +101,9 @@ public class StudySessionService {
     }
 
     public List<String> generateSuggestedQuestions(String title, ContextType contextType, String contextText) {
+        String cleanTopic = cleanTopicName(title);
         if (contextText == null || contextText.isBlank()) {
             if (title != null && !title.isBlank() && !isDefaultTitle(title)) {
-                String cleanTopic = cleanTopicName(title);
                 return List.of(
                         "What are the foundational principles of " + cleanTopic + "?",
                         "Can you explain " + cleanTopic + " with a real-world example?",
@@ -118,8 +118,18 @@ public class StudySessionService {
         }
 
         String combined = ((title != null ? title : "") + " " + contextText).toLowerCase();
-        if (isMathOrTechnicalContext(combined)) {
-            String cleanTopic = cleanTopicName(title);
+
+        // 1. Resume / CV / Candidate Profile
+        if (isResumeOrProfileContext(combined, title)) {
+            return List.of(
+                    "What are the core technical proficiencies and career highlights in " + cleanTopic + "?",
+                    "Can you break down the key engineering achievements and impact metrics described here?",
+                    "What technical interview questions would you ask based on the projects and experience in this profile?"
+            );
+        }
+
+        // 2. Mathematics / Formal Proofs / Deep Theoretical ML
+        if (isMathOrTheoreticalContext(combined)) {
             return List.of(
                     "Can you walk through the mathematical derivation of " + cleanTopic + " step by step?",
                     "What are the core trade-offs and complexity limitations in this approach?",
@@ -127,7 +137,25 @@ public class StudySessionService {
             );
         }
 
-        String cleanTopic = cleanTopicName(title);
+        // 3. Academic Research / Empirical Papers
+        if (isAcademicResearchContext(combined)) {
+            return List.of(
+                    "What is the central research hypothesis and primary contribution of " + cleanTopic + "?",
+                    "How was the experimental methodology structured, and what do the empirical results demonstrate?",
+                    "What are the key limitations and potential avenues for future research noted here?"
+            );
+        }
+
+        // 4. Software Engineering / System Architecture
+        if (isSoftwareEngineeringContext(combined, title)) {
+            return List.of(
+                    "What are the key architectural patterns and system components in " + cleanTopic + "?",
+                    "What are the core trade-offs, scalability considerations, and performance bottlenecks in this design?",
+                    "How do the services and data pipelines interact across this technical implementation?"
+            );
+        }
+
+        // 5. General / Humanities / Literature / Default
         return List.of(
                 "What are the core arguments and central concepts of " + cleanTopic + "?",
                 "Can you break down the key terminology and definitions cited here?",
@@ -139,28 +167,93 @@ public class StudySessionService {
         return title.equalsIgnoreCase("Generalized Study Session") || title.equalsIgnoreCase("Curated Study Session");
     }
 
-    private String cleanTopicName(String title) {
+    public String cleanTopicName(String title) {
         if (title == null || title.isBlank() || isDefaultTitle(title)) {
             return "this topic";
         }
-        String cleaned = title.replaceAll("\\([^)]*\\)", "").trim();
+        String cleaned = title.replaceFirst("(?i)\\.(pdf|docx|txt|md|html|json)$", "").trim();
+        cleaned = cleaned.replaceAll("\\([^)]*\\)", " ").trim();
+        cleaned = cleaned.replaceAll("[_\\-]+", " ");
         cleaned = cleaned.replaceAll("[:,-]+$", "").trim();
-        return cleaned.isEmpty() ? "this topic" : cleaned;
+        cleaned = cleaned.replaceAll("\\s+", " ").trim();
+        if (cleaned.isEmpty()) {
+            return "this topic";
+        }
+
+        // Convert to title case if all lowercase or all uppercase
+        if (cleaned.equals(cleaned.toLowerCase()) || cleaned.equals(cleaned.toUpperCase())) {
+            String[] words = cleaned.split(" ");
+            StringBuilder sb = new StringBuilder();
+            for (String word : words) {
+                if (!word.isBlank()) {
+                    if (sb.length() > 0) sb.append(" ");
+                    sb.append(Character.toUpperCase(word.charAt(0)))
+                            .append(word.substring(1).toLowerCase());
+                }
+            }
+            cleaned = sb.toString();
+        }
+        return cleaned;
     }
 
-    private boolean isMathOrTechnicalContext(String text) {
+    private boolean isResumeOrProfileContext(String text, String title) {
+        String combined = ((title != null ? title : "") + " " + (text != null ? text : "")).toLowerCase();
+        boolean hasResumeTerm = combined.contains("resume") || combined.contains("curriculum vitae")
+                || combined.contains("work experience") || combined.contains("employment history")
+                || combined.contains("professional experience") || combined.contains("career summary")
+                || combined.contains("candidate") || combined.contains("portfolio")
+                || combined.contains("bachelor of") || combined.contains("master of")
+                || (combined.contains("education") && (combined.contains("skills") || combined.contains("technologies") || combined.contains("projects")));
+
+        boolean hasRoleTerm = combined.contains("software engineer") || combined.contains("backend engineer")
+                || combined.contains("frontend engineer") || combined.contains("full stack")
+                || combined.contains("developer") || combined.contains("data scientist")
+                || combined.contains("engineering intern") || combined.contains("intern");
+
+        return hasResumeTerm && (hasRoleTerm || combined.contains("experience") || combined.contains("gpa") || combined.contains("linkedin") || combined.contains("leetcode"));
+    }
+
+    private boolean isMathOrTheoreticalContext(String text) {
         if (text == null || text.isBlank()) {
             return false;
         }
         String lower = text.toLowerCase();
-        return lower.contains("derivative") || lower.contains("integral") || lower.contains("equation")
-                || lower.contains("gradient") || lower.contains("matrix") || lower.contains("vector")
-                || lower.contains("proof") || lower.contains("theorem") || lower.contains("algorithm")
-                || lower.contains("trade-off") || lower.contains("tradeoff") || lower.contains("complexity")
-                || lower.contains("optimization") || lower.contains("eigenvalue") || lower.contains("attention")
-                || lower.contains("policy") || lower.contains("o(") || lower.contains("=") || lower.contains("∑")
-                || lower.contains("∫") || lower.contains("θ") || lower.contains("β") || lower.contains("λ")
-                || lower.contains("√");
+        boolean hasMathSymbols = lower.contains("∑") || lower.contains("∫") || lower.contains("θ")
+                || lower.contains("β") || lower.contains("λ") || lower.contains("√")
+                || lower.contains("\\frac") || lower.contains("\\sum") || lower.contains("\\int");
+
+        boolean hasProofOrTheorem = (lower.contains("theorem") || lower.contains("lemma") || lower.contains("corollary"))
+                && (lower.contains("proof") || lower.contains("proved") || lower.contains("qed"));
+
+        boolean hasCalculusOrLinearAlgebra = lower.contains("eigenvalue") || lower.contains("eigenvector")
+                || lower.contains("differential equation") || lower.contains("partial differential")
+                || (lower.contains("loss function") && (lower.contains("gradient") || lower.contains("descent") || lower.contains("matrix multiplication")))
+                || (lower.contains("gradient descent") && lower.contains("matrix"));
+
+        boolean hasAsymptoticComplexity = (lower.contains("complexity") && (lower.contains("o(n") || lower.contains("o(1") || lower.contains("o(log") || lower.contains("asymptotic")));
+
+        return hasMathSymbols || hasProofOrTheorem || hasCalculusOrLinearAlgebra || hasAsymptoticComplexity;
+    }
+
+    private boolean isAcademicResearchContext(String text) {
+        if (text == null || text.isBlank()) {
+            return false;
+        }
+        String lower = text.toLowerCase();
+        return (lower.contains("abstract") || lower.contains("introduction"))
+                && (lower.contains("methodology") || lower.contains("experimental results")
+                || lower.contains("empirical") || lower.contains("ablation")
+                || lower.contains("benchmark") || lower.contains("related work"));
+    }
+
+    private boolean isSoftwareEngineeringContext(String text, String title) {
+        String combined = ((title != null ? title : "") + " " + (text != null ? text : "")).toLowerCase();
+        return combined.contains("microservices") || combined.contains("system design")
+                || combined.contains("kubernetes") || combined.contains("docker")
+                || combined.contains("spring boot") || combined.contains("kafka")
+                || combined.contains("redis") || combined.contains("rest api")
+                || combined.contains("ci/cd") || combined.contains("gitops")
+                || (combined.contains("architecture") && (combined.contains("database") || combined.contains("service") || combined.contains("pipeline")));
     }
 
     public String resolveSessionTitle(String title, String contextText, String sourceUrl) {

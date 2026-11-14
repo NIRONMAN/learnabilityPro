@@ -198,6 +198,29 @@ class StudySessionServiceTest {
     }
 
     @Test
+    void generateSuggestedQuestionsForResumeContext() {
+        List<String> questions = sessionService.generateSuggestedQuestions(
+                "niranjan_dabhade_software_engineer",
+                ContextType.PDF,
+                "Work Experience Findability Sciences Jr. Software Engineer Java Backend Engineer Spring Boot Kafka BigQuery"
+        );
+
+        assertThat(questions).hasSize(3);
+        assertThat(questions.get(0)).contains("technical proficiencies");
+        assertThat(questions.get(0)).contains("Niranjan Dabhade Software Engineer");
+        assertThat(questions.get(1)).contains("engineering achievements");
+        assertThat(questions.get(2)).contains("interview questions");
+    }
+
+    @Test
+    void cleanTopicNameFormatsSnakeCaseAndExtensions() {
+        assertThat(sessionService.cleanTopicName("niranjan_dabhade_software_engineer.pdf"))
+                .isEqualTo("Niranjan Dabhade Software Engineer");
+        assertThat(sessionService.cleanTopicName("attention_is_all_you_need"))
+                .isEqualTo("Attention Is All You Need");
+    }
+
+    @Test
     void hasVectorStoreIdentifiesContextTypesCorrectly() {
         StudySession pdfSession = StudySession.builder()
                 .id(UUID.randomUUID())
