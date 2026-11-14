@@ -76,6 +76,12 @@ export default function DashboardPage() {
     }
   };
 
+  const getSessionUrl = (id: string, type?: string) => {
+    if (type === 'FLASHCARD') return `/flashcard/${id}`;
+    if (type === 'DIAGRAM') return `/diagram/${id}`;
+    return `/learn/${id}`;
+  };
+
   const handleCreateSession = async (e: React.FormEvent) => {
     e.preventDefault();
     setSubmitting(true);
@@ -83,6 +89,8 @@ export default function DashboardPage() {
 
     try {
       const trimmedTitle = newTitle.trim();
+      let createdSessionId: string | null = null;
+      const targetSessionType = sessionType;
 
       if (modalMode === 'PDF') {
         if (!selectedFile) throw new Error('Please select a PDF file to upload');
@@ -96,31 +104,40 @@ export default function DashboardPage() {
             contextType: 'PDF',
             sourceUrl: selectedFile.name,
           });
+          createdSessionId = created.id;
           await api.uploadPdf(selectedFile, created.id);
         } else {
-          await api.uploadPdf(selectedFile);
+          const res = await api.uploadPdf(selectedFile);
+          createdSessionId = res.sessionId;
         }
       } else if (modalMode === 'YOUTUBE') {
         if (!youtubeUrl.trim()) throw new Error('Please enter a valid YouTube URL');
         const resolvedTitle = trimmedTitle || 'YouTube Study Session';
-        await api.ingestYouTube({ url: youtubeUrl.trim(), title: resolvedTitle });
+        const res = await api.ingestYouTube({ url: youtubeUrl.trim(), title: resolvedTitle });
+        createdSessionId = res.sessionId;
       } else {
         let resolvedTitle = trimmedTitle;
         if (!resolvedTitle) {
           const firstLine = contextText.trim().split('\n')[0]?.trim();
           resolvedTitle = (firstLine ? firstLine.slice(0, 40).trim() : '') || 'Generalized Study Session';
         }
-        await api.createSession({
+        const created = await api.createSession({
           title: resolvedTitle,
           sessionType,
           contextType: 'TOPIC',
           contextText: contextText.trim() || undefined,
         });
+        createdSessionId = created.id;
       }
 
       setShowModal(false);
       resetModal();
-      await loadSessions();
+
+      if (createdSessionId) {
+        router.push(getSessionUrl(createdSessionId, targetSessionType));
+      } else {
+        await loadSessions();
+      }
     } catch (err: any) {
       setModalError(err.message || 'Failed to create session on server.');
     } finally {
@@ -131,22 +148,23 @@ export default function DashboardPage() {
   const handleInitializeStarter = async (starterType: 'vaswani' | 'deepseek' | 'cs229') => {
     try {
       setLoading(true);
+      let created: StudySession | null = null;
       if (starterType === 'vaswani') {
-        await api.createSession({
+        created = await api.createSession({
           title: 'Attention Is All You Need (Vaswani et al. 2017)',
           sessionType: 'LEARN',
           contextType: 'PDF',
           contextText: '§ 3.2 Multi-Head Attention Mechanism\nAn attention function can be described as mapping a query and a set of key-value pairs to an output, where the query, keys, values, and output are all vectors. The output is computed as a weighted sum of the values, where the weight assigned to each value is computed by a compatibility function of the query with the corresponding key.\n\nAttention(Q, K, V) = softmax(QKᵀ / √d_k)V\n\nDividing by √d_k prevents the dot products from growing excessively large for large key dimensions, avoiding saturation in regions of vanishing gradients.\n\n§ 4.0 Complexity Analysis\nMaximum path length between any two word positions is strictly O(1) in self-attention, compared to O(n) in recurrent layers, enabling full parallelization across training tokens.'
         });
       } else if (starterType === 'deepseek') {
-        await api.createSession({
+        created = await api.createSession({
           title: 'DeepSeek-R1: Mathematical Reasoning via GRPO',
           sessionType: 'FLASHCARD',
           contextType: 'TOPIC',
           contextText: '§ 2.1 Rule-Based Reward Verification\nTraditional RLHF relies on neural reward models that suffer from reward hacking and drift during long chain-of-thought exploration. DeepSeek-R1 enforces deterministic rule-based verification: compiler pass/fail execution for code and ground-truth symbolic equivalence for mathematical proofs.\n\n§ 3.1 Group Relative Policy Optimization (GRPO)\nTo mitigate the substantial memory overhead of training a separate value network equal in size to the policy model, GRPO samples a group of G candidate outputs for each query and computes normalized relative advantages across the sampled group.\n\nJ_GRPO(θ) = E [ 1/G ∑ (min(r_i A_i, clip(...)A_i)) - β D_KL(π_θ || π_ref) ]'
         });
       } else if (starterType === 'cs229') {
-        await api.createSession({
+        created = await api.createSession({
           title: 'Stanford CS229: Gradient Descent & Normal Equations',
           sessionType: 'DIAGRAM',
           contextType: 'YOUTUBE',
@@ -154,7 +172,11 @@ export default function DashboardPage() {
           contextText: '§ 1.1 Supervised Learning & Linear Regression\nTo perform supervised learning, we define the cost function J(θ) measuring the squared difference between hypothesis h_θ(x) and ground truth targets y. The batch gradient descent update repeatedly steps in the negative gradient direction across all training examples.\n\n§ 1.2 The Normal Equations\nRather than iterating with gradient descent, the optimal parameters θ that minimize J(θ) can be computed directly in closed form using matrix derivatives and setting the gradient ∇_θ J(θ) to zero.\n\nθ = (XᵀX)⁻¹ Xᵀy\n\nProvided X has full column rank, XᵀX is strictly invertible, providing the global minimum in O(d³) algebraic matrix operations.'
         });
       }
-      await loadSessions();
+      if (created?.id) {
+        router.push(getSessionUrl(created.id, created.sessionType));
+      } else {
+        await loadSessions();
+      }
     } catch (err: any) {
       console.error('Failed to initialize starter:', err);
     } finally {

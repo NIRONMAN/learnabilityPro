@@ -4,6 +4,7 @@ import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import { useTheme } from './ThemeProvider';
 import { Sun, Moon, Sparkles, Terminal, Search, Layers, BookOpen, UserCheck, ArrowRight, Activity, Command, LogOut } from 'lucide-react';
+import { AgentLogo } from './AgentLogo';
 import { authStorage } from '@/lib/api';
 import { useState, useEffect } from 'react';
 
@@ -32,14 +33,23 @@ export function SanctuaryHeader({ onOpenCommandPalette }: { onOpenCommandPalette
     window.location.href = '/';
   };
 
+  // Study sessions have their own unified focused header to prevent redundant stacked top bars
+  if (
+    pathname?.startsWith('/learn') ||
+    pathname?.startsWith('/flashcard') ||
+    pathname?.startsWith('/diagram')
+  ) {
+    return null;
+  }
+
   return (
     <header className="border-b border-rule-border bg-surface/95 backdrop-blur-md sticky top-0 z-40 transition-colors duration-200">
       <div className="max-w-7xl mx-auto px-4 sm:px-6 h-14 flex items-center justify-between text-xs">
         {/* Brand identity: Academic Studio Breadcrumb */}
         <div className="flex items-center gap-3">
           <Link href="/" className="group flex items-center gap-2.5 text-ink-primary focus:outline-none">
-            <div className="w-7 h-7 rounded-md border border-rule-border bg-surface-elevated flex items-center justify-center font-mono font-bold text-xs text-accent-cyan group-hover:border-accent-cyan transition-all shadow-sm">
-              LP
+            <div className="w-7 h-7 rounded-md border border-rule-border bg-surface-elevated flex items-center justify-center group-hover:border-accent-cyan transition-all shadow-sm">
+              <AgentLogo size={18} variant="cyan" />
             </div>
             <div className="flex items-center gap-1.5 font-mono">
               <span className="font-semibold text-sm text-ink-primary">
