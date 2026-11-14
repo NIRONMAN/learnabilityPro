@@ -2,6 +2,7 @@ package com.learnabilitypro.learnability.service;
 
 import com.learnabilitypro.learnability.domain.dto.ChatMessageDto;
 import com.learnabilitypro.learnability.domain.entity.ChatMessage;
+import com.learnabilitypro.learnability.domain.entity.ContextType;
 import com.learnabilitypro.learnability.domain.entity.MessageSender;
 import com.learnabilitypro.learnability.domain.entity.StudySession;
 import com.learnabilitypro.learnability.domain.repository.ChatMessageRepository;
@@ -58,18 +59,29 @@ public class ChatService {
         MessageChatMemoryAdvisor memoryAdvisor = MessageChatMemoryAdvisor.builder(chatMemory).build();
 
         String assistantResponse;
-        try {
-            QuestionAnswerAdvisor ragAdvisor = ragService.createSessionAdvisor(sessionId);
-            assistantResponse = chatClient.prompt()
-                    .system(systemPrompt)
-                    .user(userMessage)
-                    .advisors(a -> a
-                            .param(CHAT_MEMORY_CONVERSATION_ID, sessionId.toString())
-                            .advisors(memoryAdvisor, ragAdvisor))
-                    .call()
-                    .content();
-        } catch (Exception ex) {
-            log.warn("RAG Advisor fallback to standard memory for session {}: {}", sessionId, ex.getMessage());
+        if (shouldUseRagAdvisor(session)) {
+            try {
+                QuestionAnswerAdvisor ragAdvisor = ragService.createSessionAdvisor(sessionId);
+                assistantResponse = chatClient.prompt()
+                        .system(systemPrompt)
+                        .user(userMessage)
+                        .advisors(a -> a
+                                .param(CHAT_MEMORY_CONVERSATION_ID, sessionId.toString())
+                                .advisors(memoryAdvisor, ragAdvisor))
+                        .call()
+                        .content();
+            } catch (Exception ex) {
+                log.warn("RAG Advisor fallback to standard memory for session {}: {}", sessionId, ex.getMessage());
+                assistantResponse = chatClient.prompt()
+                        .system(systemPrompt)
+                        .user(userMessage)
+                        .advisors(a -> a
+                                .param(CHAT_MEMORY_CONVERSATION_ID, sessionId.toString())
+                                .advisors(memoryAdvisor))
+                        .call()
+                        .content();
+            }
+        } else {
             assistantResponse = chatClient.prompt()
                     .system(systemPrompt)
                     .user(userMessage)
@@ -110,18 +122,29 @@ public class ChatService {
         StringBuilder fullResponse = new StringBuilder();
 
         Flux<String> streamFlux;
-        try {
-            QuestionAnswerAdvisor ragAdvisor = ragService.createSessionAdvisor(sessionId);
-            streamFlux = chatClient.prompt()
-                    .system(systemPrompt)
-                    .user(userMessage)
-                    .advisors(a -> a
-                            .param(CHAT_MEMORY_CONVERSATION_ID, sessionId.toString())
-                            .advisors(memoryAdvisor, ragAdvisor))
-                    .stream()
-                    .content();
-        } catch (Exception ex) {
-            log.warn("RAG stream fallback to standard memory: {}", ex.getMessage());
+        if (shouldUseRagAdvisor(session)) {
+            try {
+                QuestionAnswerAdvisor ragAdvisor = ragService.createSessionAdvisor(sessionId);
+                streamFlux = chatClient.prompt()
+                        .system(systemPrompt)
+                        .user(userMessage)
+                        .advisors(a -> a
+                                .param(CHAT_MEMORY_CONVERSATION_ID, sessionId.toString())
+                                .advisors(memoryAdvisor, ragAdvisor))
+                        .stream()
+                        .content();
+            } catch (Exception ex) {
+                log.warn("RAG stream fallback to standard memory: {}", ex.getMessage());
+                streamFlux = chatClient.prompt()
+                        .system(systemPrompt)
+                        .user(userMessage)
+                        .advisors(a -> a
+                                .param(CHAT_MEMORY_CONVERSATION_ID, sessionId.toString())
+                                .advisors(memoryAdvisor))
+                        .stream()
+                        .content();
+            }
+        } else {
             streamFlux = chatClient.prompt()
                     .system(systemPrompt)
                     .user(userMessage)
@@ -156,16 +179,31 @@ public class ChatService {
                 .toList();
     }
 
-    private String buildSystemPrompt(StudySession session) {
+    public boolean shouldUseRagAdvisor(StudySession session) {
+        if (session == null || session.getContextType() == null) {
+            return false;
+        }
+        if (session.getContextType() == ContextType.PDF) {
+            return true;
+        }
+        return ragService != null && session.getId() != null && ragService.hasVectors(session.getId());
+    }
+
+    public String buildSystemPrompt(StudySession session) {
         StringBuilder sb = new StringBuilder();
         sb.append("You are an intelligent, pedagogically grounded AI tutor for Learnability Pro.\n");
         sb.append("Your goal is to guide the student toward deep mastery, active recall, and conceptual clarity.\n");
         sb.append("Topic: ").append(session.getTitle()).append("\n");
         sb.append("Session Type: ").append(session.getSessionType()).append("\n");
+
         if (session.getContextText() != null && !session.getContextText().isBlank()) {
+            sb.append("\nThe user has provided reference study material below. Treat this material strictly as your primary source of truth when answering questions, citing definitions and concepts directly from it.\n");
             sb.append("\nReference Study Material:\n");
             sb.append(session.getContextText()).append("\n");
+        } else {
+            sb.append("\nNo specific reference source or syllabus has been attached for this session. Act as an expert, generalized Socratic academic tutor. Draw upon your broad general knowledge to teach, explain, test understanding, and answer any questions thoroughly and insightfully without saying you lack context.\n");
         }
+
         sb.append("\nAlways be concise, precise, encouraging, and break complex topics down step by step.");
         return sb.toString();
     }

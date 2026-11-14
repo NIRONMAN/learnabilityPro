@@ -19,6 +19,9 @@ export interface StudySession {
   contextType: 'PDF' | 'YOUTUBE' | 'TOPIC';
   sourceUrl?: string;
   contextText?: string;
+  hasVectorStore?: boolean;
+  ragEnabled?: boolean;
+  suggestedQuestions?: string[];
   createdAt: string;
   updatedAt: string;
 }
@@ -114,7 +117,7 @@ export const api = {
   listSessions: () => request<StudySession[]>('/sessions'),
   getSession: (id: string) => request<StudySession>(`/sessions/${id}`),
   createSession: (data: {
-    title: string;
+    title?: string;
     sessionType: string;
     contextType: string;
     sourceUrl?: string;

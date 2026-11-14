@@ -91,4 +91,131 @@ class StudySessionServiceTest {
         assertThat(sessions).hasSize(1);
         assertThat(sessions.get(0).title()).isEqualTo("Quantum Computing");
     }
+
+    @Test
+    void createSessionWithNullTitleAutoGeneratesFromContextText() {
+        CreateSessionRequest request = new CreateSessionRequest(
+                null,
+                SessionType.LEARN,
+                ContextType.PDF,
+                null,
+                "§ 3.2 Multi-Head Attention Mechanism\nAn attention function can be described..."
+        );
+
+        when(userRepository.findById(userId)).thenReturn(Optional.of(testUser));
+        when(sessionRepository.save(any(StudySession.class))).thenAnswer(invocation -> {
+            StudySession session = invocation.getArgument(0);
+            session.setId(UUID.randomUUID());
+            return session;
+        });
+
+        StudySessionDto created = sessionService.createSession(userId, request);
+
+        assertThat(created).isNotNull();
+        assertThat(created.title()).isEqualTo("Multi-Head Attention Mechanism");
+        assertThat(created.hasVectorStore()).isTrue();
+        assertThat(created.suggestedQuestions()).isNotEmpty();
+    }
+
+    @Test
+    void createSessionWithBlankTitleAutoGeneratesFromSourceUrl() {
+        CreateSessionRequest request = new CreateSessionRequest(
+                "   ",
+                SessionType.LEARN,
+                ContextType.YOUTUBE,
+                "https://www.youtube.com/watch?v=jGwO_UgTS7I",
+                null
+        );
+
+        when(userRepository.findById(userId)).thenReturn(Optional.of(testUser));
+        when(sessionRepository.save(any(StudySession.class))).thenAnswer(invocation -> {
+            StudySession session = invocation.getArgument(0);
+            session.setId(UUID.randomUUID());
+            return session;
+        });
+
+        StudySessionDto created = sessionService.createSession(userId, request);
+
+        assertThat(created).isNotNull();
+        assertThat(created.title()).isEqualTo("YouTube: jGwO_UgTS7I");
+    }
+
+    @Test
+    void createSessionWithNullTitleAndNoContextOrUrlFallsBackToGeneralized() {
+        CreateSessionRequest request = new CreateSessionRequest(
+                null,
+                SessionType.LEARN,
+                ContextType.TOPIC,
+                null,
+                null
+        );
+
+        when(userRepository.findById(userId)).thenReturn(Optional.of(testUser));
+        when(sessionRepository.save(any(StudySession.class))).thenAnswer(invocation -> {
+            StudySession session = invocation.getArgument(0);
+            session.setId(UUID.randomUUID());
+            return session;
+        });
+
+        StudySessionDto created = sessionService.createSession(userId, request);
+
+        assertThat(created).isNotNull();
+        assertThat(created.title()).isEqualTo("Generalized Study Session");
+        assertThat(created.hasVectorStore()).isFalse();
+        assertThat(created.suggestedQuestions()).contains(
+                "What are the foundational principles of this topic?",
+                "Can you explain this with a real-world example?",
+                "What are common misconceptions about this?"
+        );
+    }
+
+    @Test
+    void generateSuggestedQuestionsForMathTechnicalContext() {
+        List<String> questions = sessionService.generateSuggestedQuestions(
+                "Transformer Models",
+                ContextType.PDF,
+                "The loss function is minimized using gradient descent and matrix multiplication. Complexity is O(n^2)."
+        );
+
+        assertThat(questions).hasSize(3);
+        assertThat(questions.get(0)).contains("mathematical derivation");
+        assertThat(questions.get(1)).contains("core trade-offs and complexity limitations");
+        assertThat(questions.get(2)).contains("intuitive proof or justification");
+    }
+
+    @Test
+    void generateSuggestedQuestionsForLiteratureContext() {
+        List<String> questions = sessionService.generateSuggestedQuestions(
+                "Hamlet Soliloquy",
+                ContextType.TOPIC,
+                "To be or not to be, that is the question. The tragic flaws of moral paralysis."
+        );
+
+        assertThat(questions).hasSize(3);
+        assertThat(questions.get(0)).contains("core arguments and central concepts of Hamlet Soliloquy");
+        assertThat(questions.get(1)).contains("terminology and definitions");
+        assertThat(questions.get(2)).contains("active recall");
+    }
+
+    @Test
+    void hasVectorStoreIdentifiesContextTypesCorrectly() {
+        StudySession pdfSession = StudySession.builder()
+                .id(UUID.randomUUID())
+                .contextType(ContextType.PDF)
+                .build();
+        StudySession topicSession = StudySession.builder()
+                .id(UUID.randomUUID())
+                .contextType(ContextType.TOPIC)
+                .build();
+        StudySession youtubeSessionWithTranscript = StudySession.builder()
+                .id(UUID.randomUUID())
+                .contextType(ContextType.YOUTUBE)
+                .sourceUrl("https://youtube.com/watch?v=123")
+                .contextText("Transcribed lecture content")
+                .build();
+
+        assertThat(sessionService.hasVectorStore(pdfSession)).isTrue();
+        assertThat(sessionService.hasVectorStore(topicSession)).isFalse();
+        assertThat(sessionService.hasVectorStore(youtubeSessionWithTranscript)).isTrue();
+    }
 }

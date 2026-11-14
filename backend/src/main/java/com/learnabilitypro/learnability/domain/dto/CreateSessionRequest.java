@@ -6,7 +6,7 @@ import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotNull;
 
 public record CreateSessionRequest(
-        @NotBlank String title,
+        String title,
         @NotNull SessionType sessionType,
         @NotNull ContextType contextType,
         String sourceUrl,

@@ -271,9 +271,9 @@ export default function LearnWorkspacePage() {
               <Bot className="w-3.5 h-3.5 text-accent-cyan" />
               Socratic Tutor
             </span>
-            <span className="text-[11px] text-accent-emerald flex items-center gap-1">
-              <span className="w-1.5 h-1.5 rounded-full bg-accent-emerald"></span>
-              Grounded Retrieval Active
+            <span className={`text-[11px] flex items-center gap-1 ${session.hasVectorStore ? 'text-accent-emerald' : 'text-accent-cyan'}`}>
+              <span className={`w-1.5 h-1.5 rounded-full ${session.hasVectorStore ? 'bg-accent-emerald' : 'bg-accent-cyan'}`}></span>
+              {session.hasVectorStore ? 'Grounded Retrieval Active' : 'Socratic Tutor Active'}
             </span>
           </div>
 
@@ -354,24 +354,39 @@ export default function LearnWorkspacePage() {
 
           {/* Quick Inquiry Chips */}
           <div className="px-4 py-2 border-t border-rule-border bg-surface flex gap-2 overflow-x-auto font-mono text-[11px]">
-            <button
-              onClick={() => handleSendMessage('Why divide by √d_k in attention?')}
-              className="px-2.5 py-1 rounded-full border border-rule-border hover:border-accent-cyan bg-canvas text-ink-muted hover:text-ink-primary whitespace-nowrap transition-colors cursor-pointer"
-            >
-              Why √d_k?
-            </button>
-            <button
-              onClick={() => handleSendMessage('Explain the mathematical derivation.')}
-              className="px-2.5 py-1 rounded-full border border-rule-border hover:border-accent-cyan bg-canvas text-ink-muted hover:text-ink-primary whitespace-nowrap transition-colors cursor-pointer"
-            >
-              Derivation proof
-            </button>
-            <button
-              onClick={() => handleSendMessage('What are the architectural trade-offs?')}
-              className="px-2.5 py-1 rounded-full border border-rule-border hover:border-accent-cyan bg-canvas text-ink-muted hover:text-ink-primary whitespace-nowrap transition-colors cursor-pointer"
-            >
-              Key trade-offs
-            </button>
+            {session.suggestedQuestions && session.suggestedQuestions.length > 0 ? (
+              session.suggestedQuestions.map((q, idx) => (
+                <button
+                  key={idx}
+                  onClick={() => handleSendMessage(q)}
+                  title={q}
+                  className="px-2.5 py-1 rounded-full border border-rule-border hover:border-accent-cyan bg-canvas text-ink-muted hover:text-ink-primary whitespace-nowrap transition-colors cursor-pointer max-w-xs truncate"
+                >
+                  {q}
+                </button>
+              ))
+            ) : (
+              <>
+                <button
+                  onClick={() => handleSendMessage('Why divide by √d_k in attention?')}
+                  className="px-2.5 py-1 rounded-full border border-rule-border hover:border-accent-cyan bg-canvas text-ink-muted hover:text-ink-primary whitespace-nowrap transition-colors cursor-pointer"
+                >
+                  Why √d_k?
+                </button>
+                <button
+                  onClick={() => handleSendMessage('Explain the mathematical derivation.')}
+                  className="px-2.5 py-1 rounded-full border border-rule-border hover:border-accent-cyan bg-canvas text-ink-muted hover:text-ink-primary whitespace-nowrap transition-colors cursor-pointer"
+                >
+                  Derivation proof
+                </button>
+                <button
+                  onClick={() => handleSendMessage('What are the architectural trade-offs?')}
+                  className="px-2.5 py-1 rounded-full border border-rule-border hover:border-accent-cyan bg-canvas text-ink-muted hover:text-ink-primary whitespace-nowrap transition-colors cursor-pointer"
+                >
+                  Key trade-offs
+                </button>
+              </>
+            )}
           </div>
 
           {/* Chat Input Bar */}
