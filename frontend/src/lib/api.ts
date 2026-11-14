@@ -14,11 +14,13 @@ export interface AuthResponse {
 export interface StudySession {
   id: string;
   userId: string;
-  title: string;
+  title?: string;
   sessionType: 'LEARN' | 'REVISE' | 'FLASHCARD' | 'DIAGRAM';
   contextType: 'PDF' | 'YOUTUBE' | 'TOPIC';
   sourceUrl?: string;
   contextText?: string;
+  hasVectorStore?: boolean;
+  suggestedQuestions?: string[];
   createdAt: string;
   updatedAt: string;
 }
@@ -114,7 +116,7 @@ export const api = {
   listSessions: () => request<StudySession[]>('/sessions'),
   getSession: (id: string) => request<StudySession>(`/sessions/${id}`),
   createSession: (data: {
-    title: string;
+    title?: string;
     sessionType: string;
     contextType: string;
     sourceUrl?: string;
