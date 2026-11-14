@@ -398,8 +398,28 @@ export default function LearnabilityLandingAndStudio() {
   // Active Concept Node state in Diagram view
   const [activeConceptNode, setActiveConceptNode] = useState<string>('mha');
 
-  // Guest pass / Auth
+  // Guest pass / Auth Gate Modal state
   const [isGeneratingPass, setIsGeneratingPass] = useState(false);
+  const [isAuthModalOpen, setIsAuthModalOpen] = useState(false);
+  const [authMode, setAuthMode] = useState<'login' | 'register'>('login');
+  const [authEmail, setAuthEmail] = useState('');
+  const [authPassword, setAuthPassword] = useState('');
+  const [authName, setAuthName] = useState('');
+  const [authError, setAuthError] = useState<string | null>(null);
+  const [isSubmittingAuth, setIsSubmittingAuth] = useState(false);
+
+  // Listen for open-auth-modal events or URL query ?auth=login
+  useEffect(() => {
+    const handleOpenAuth = () => {
+      setAuthError(null);
+      setIsAuthModalOpen(true);
+    };
+    window.addEventListener('open-auth-modal', handleOpenAuth);
+    if (typeof window !== 'undefined' && window.location.search.includes('auth=')) {
+      setIsAuthModalOpen(true);
+    }
+    return () => window.removeEventListener('open-auth-modal', handleOpenAuth);
+  }, []);
 
   // Initialize or reset chat and cards when doc changes
   useEffect(() => {
@@ -538,24 +558,66 @@ export default function LearnabilityLandingAndStudio() {
     }, 650);
   };
 
-  // 1-Click Scholar Pass (authenticates with backend or sets fallback scholar session)
+  // Real User Authentication Submit (Login or Register)
+  const handleAuthSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setAuthError(null);
+    setIsSubmittingAuth(true);
+
+    try {
+      if (authMode === 'login') {
+        const res = await api.login({ email: authEmail.trim(), password: authPassword });
+        if (res?.token) {
+          authStorage.setToken(res.token);
+          setIsAuthModalOpen(false);
+          router.push('/dashboard');
+        } else {
+          throw new Error('Authentication failed: no token received from server');
+        }
+      } else {
+        const res = await api.register({
+          email: authEmail.trim(),
+          password: authPassword,
+          name: authName.trim() || undefined,
+        });
+        if (res?.token) {
+          authStorage.setToken(res.token);
+          setIsAuthModalOpen(false);
+          router.push('/dashboard');
+        } else {
+          throw new Error('Registration failed: no token received from server');
+        }
+      }
+    } catch (err: any) {
+      setAuthError(err.message || 'Authentication failed. Please check credentials or backend availability.');
+    } finally {
+      setIsSubmittingAuth(false);
+    }
+  };
+
+  // 1-Click Scholar Pass (authenticates with backend as real demo scholar user)
   const handleQuickScholarPass = async () => {
     setIsGeneratingPass(true);
+    setAuthError(null);
     try {
-      const auth = await api.login({ email: 'scholar@learnability.pro', password: 'password123' })
-        .catch(async () => {
-          return await api.register({ email: 'scholar@learnability.pro', password: 'password123', name: 'Dr. Scholar' });
-        });
+      let auth;
+      try {
+        auth = await api.login({ email: 'scholar@learnability.pro', password: 'password123' });
+      } catch {
+        auth = await api.register({ email: 'scholar@learnability.pro', password: 'password123', name: 'Dr. Scholar' });
+      }
       if (auth?.token) {
         authStorage.setToken(auth.token);
+        setIsAuthModalOpen(false);
+        router.push('/dashboard');
       } else {
-        authStorage.setToken('guest_scholar_token_distraction_free');
+        throw new Error('Failed to obtain authenticated token from server');
       }
-    } catch {
-      authStorage.setToken('guest_scholar_token_distraction_free');
+    } catch (err: any) {
+      setAuthError(err.message || 'Scholar pass generation failed. Please sign in manually.');
+      setIsAuthModalOpen(true);
     } finally {
       setIsGeneratingPass(false);
-      router.push('/dashboard');
     }
   };
 
@@ -1380,6 +1442,162 @@ export default function LearnabilityLandingAndStudio() {
                 </button>
               </div>
             </form>
+          </div>
+        </div>
+      )}
+
+      {/* ========================================================= */}
+      {/* AUTHENTICATION GATE MODAL                                 */}
+      {/* ========================================================= */}
+      {isAuthModalOpen && (
+        <div className="fixed inset-0 z-50 bg-black/70 backdrop-blur-md flex items-center justify-center p-4">
+          <div className="bg-surface border border-rule-border rounded-2xl max-w-md w-full p-6 shadow-2xl space-y-5 animate-in fade-in zoom-in-95 duration-200">
+            {/* Modal Header */}
+            <div className="flex items-start justify-between">
+              <div>
+                <div className="inline-flex items-center gap-2 px-2 py-0.5 rounded text-[11px] font-mono bg-accent-cyan/10 text-accent-cyan border border-accent-cyan/20 mb-2">
+                  <ShieldCheck className="w-3.5 h-3.5" />
+                  <span>Scholar Authentication Gate</span>
+                </div>
+                <h3 className="text-lg font-bold text-ink-primary">
+                  {authMode === 'login' ? 'Sign In to Study Sanctuary' : 'Create Scholar Account'}
+                </h3>
+                <p className="text-xs text-ink-muted mt-0.5">
+                  Access your persistent research corpus, live LLM Socratic streaming, and Leitner recall.
+                </p>
+              </div>
+              <button
+                onClick={() => {
+                  setIsAuthModalOpen(false);
+                  setAuthError(null);
+                }}
+                className="p-1 rounded-md text-ink-muted hover:text-ink-primary hover:bg-surface-elevated transition-colors cursor-pointer"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            {/* Mode Switcher */}
+            <div className="grid grid-cols-2 rounded-lg bg-surface-elevated p-1 border border-rule-border text-xs font-mono">
+              <button
+                type="button"
+                onClick={() => {
+                  setAuthMode('login');
+                  setAuthError(null);
+                }}
+                className={`py-1.5 rounded-md transition-all cursor-pointer font-medium ${
+                  authMode === 'login'
+                    ? 'bg-canvas text-accent-cyan shadow-sm border border-rule-border'
+                    : 'text-ink-muted hover:text-ink-primary'
+                }`}
+              >
+                Sign In
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  setAuthMode('register');
+                  setAuthError(null);
+                }}
+                className={`py-1.5 rounded-md transition-all cursor-pointer font-medium ${
+                  authMode === 'register'
+                    ? 'bg-canvas text-accent-cyan shadow-sm border border-rule-border'
+                    : 'text-ink-muted hover:text-ink-primary'
+                }`}
+              >
+                Create Account
+              </button>
+            </div>
+
+            {/* Error Banner */}
+            {authError && (
+              <div className="p-3 rounded-lg bg-red-500/10 border border-red-500/30 text-red-400 text-xs font-mono leading-relaxed">
+                {authError}
+              </div>
+            )}
+
+            {/* Auth Form */}
+            <form onSubmit={handleAuthSubmit} className="space-y-3.5">
+              {authMode === 'register' && (
+                <div>
+                  <label className="block text-[11px] font-mono text-ink-muted mb-1 uppercase font-semibold">
+                    Full Name / Title
+                  </label>
+                  <input
+                    type="text"
+                    required
+                    value={authName}
+                    onChange={(e) => setAuthName(e.target.value)}
+                    placeholder="e.g. Dr. Ada Lovelace"
+                    className="w-full bg-canvas border border-rule-border rounded-lg px-3.5 py-2 text-xs text-ink-primary focus:outline-none focus:border-accent-cyan font-sans"
+                  />
+                </div>
+              )}
+
+              <div>
+                <label className="block text-[11px] font-mono text-ink-muted mb-1 uppercase font-semibold">
+                  Academic Email
+                </label>
+                <input
+                  type="email"
+                  required
+                  value={authEmail}
+                  onChange={(e) => setAuthEmail(e.target.value)}
+                  placeholder="scholar@university.edu"
+                  className="w-full bg-canvas border border-rule-border rounded-lg px-3.5 py-2 text-xs text-ink-primary focus:outline-none focus:border-accent-cyan font-sans"
+                />
+              </div>
+
+              <div>
+                <label className="block text-[11px] font-mono text-ink-muted mb-1 uppercase font-semibold">
+                  Password
+                </label>
+                <input
+                  type="password"
+                  required
+                  value={authPassword}
+                  onChange={(e) => setAuthPassword(e.target.value)}
+                  placeholder="••••••••••••"
+                  className="w-full bg-canvas border border-rule-border rounded-lg px-3.5 py-2 text-xs text-ink-primary focus:outline-none focus:border-accent-cyan font-sans"
+                />
+              </div>
+
+              <button
+                type="submit"
+                disabled={isSubmittingAuth}
+                className="w-full py-2.5 rounded-lg bg-accent-cyan text-slate-950 font-bold hover:bg-accent-cyan/90 transition-all font-mono text-xs flex items-center justify-center gap-2 cursor-pointer shadow-md shadow-cyan-500/20 disabled:opacity-50"
+              >
+                {isSubmittingAuth ? (
+                  <span>Authenticating...</span>
+                ) : authMode === 'login' ? (
+                  <>
+                    <span>Sign In to Workspace</span>
+                    <ArrowRight className="w-3.5 h-3.5" />
+                  </>
+                ) : (
+                  <>
+                    <span>Create Account & Enter Studio</span>
+                    <ArrowRight className="w-3.5 h-3.5" />
+                  </>
+                )}
+              </button>
+            </form>
+
+            {/* Quick Demo Scholar Pass */}
+            <div className="pt-2 border-t border-rule-border space-y-2">
+              <div className="text-[10px] font-mono uppercase tracking-wider text-center text-ink-muted">
+                or instant access with verified credentials
+              </div>
+              <button
+                type="button"
+                onClick={handleQuickScholarPass}
+                disabled={isGeneratingPass}
+                className="w-full py-2 rounded-lg border border-rule-border bg-surface-elevated hover:bg-surface text-ink-primary font-mono text-xs flex items-center justify-center gap-2 transition-all cursor-pointer shadow-sm disabled:opacity-50"
+              >
+                <GraduationCap className="w-4 h-4 text-accent-cyan" />
+                <span>{isGeneratingPass ? 'Generating Scholar Pass...' : '1-Click Scholar Pass (Test Account)'}</span>
+              </button>
+            </div>
           </div>
         </div>
       )}

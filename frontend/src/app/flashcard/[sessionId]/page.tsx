@@ -20,75 +20,6 @@ import {
   BookOpen
 } from 'lucide-react';
 
-const FALLBACK_DECKS_MAP: Record<string, FlashcardDeck[]> = {
-  'vaswani-2017-demo': [
-    {
-      topic: 'Attention Is All You Need (Vaswani 2017)',
-      cards: [
-        {
-          question: 'Why does Scaled Dot-Product Attention scale logits by 1/√d_k?',
-          answer: 'For large values of d_k, the dot products grow large in magnitude, pushing the softmax function into regions with vanishingly small gradients. Scaling by 1/√d_k counteracts this variance scaling and stabilizes backpropagation.',
-          hint: 'Consider the variance of dot products of independent random variables with unit variance.'
-        },
-        {
-          question: 'What is the computational complexity and maximum path length of Self-Attention vs Recurrent layers?',
-          answer: 'Self-Attention has O(1) sequential operations and O(1) maximum path length between any two token positions, whereas Recurrent layers require O(n) sequential steps, precluding parallelization.',
-          hint: 'Table 1 in §4.0 compares sequential operations vs layer complexity.'
-        },
-        {
-          question: 'How does Multi-Head Attention outperform a single attention function of dimension d_model?',
-          answer: 'It jointly attends to information from different representation subspaces at different positions. A single attention head performs averaging which inhibits attending to multiple subspace relationships simultaneously.',
-          hint: 'Think about subspace projections and query/key separation.'
-        }
-      ]
-    }
-  ],
-  'deepseek-r1-demo': [
-    {
-      topic: 'DeepSeek-R1 Reasoning & GRPO',
-      cards: [
-        {
-          question: 'Why does GRPO eliminate the critic (value) model required in standard PPO?',
-          answer: 'GRPO samples a group of candidate outputs {o_1, ..., o_G} for each prompt and estimates the baseline directly from the group empirical mean and standard deviation, saving substantial GPU memory.',
-          hint: 'Look at the advantage formula: A_i = (R_i - mean(R)) / std(R).'
-        },
-        {
-          question: 'What is the role of cold-start data before initiating large-scale RL?',
-          answer: 'A small curated dataset of high-quality reasoning traces formats the initial outputs with readable markdown, structured thinking tags (<think>...</think>), and prevents unreadable reasoning degeneracy.',
-          hint: 'Bootstrapping human-readable chain-of-thought structure.'
-        },
-        {
-          question: 'Why is rule-based reward verification superior to neural reward models in mathematics and coding?',
-          answer: 'Rule-based verification provides deterministic, non-gameable ground truth (compiler output and symbolic math equivalence), completely eliminating reward model drift and reward hacking.',
-          hint: 'Deterministic automated test cases vs neural evaluation.'
-        }
-      ]
-    }
-  ],
-  'cs229-demo': [
-    {
-      topic: 'Stanford CS229: Gradient Descent & Normal Equations',
-      cards: [
-        {
-          question: 'Under what mathematical conditions is XᵀX non-invertible in the Normal Equations?',
-          answer: 'XᵀX is non-invertible (singular) if features are linearly dependent (collinear) or if the feature dimension d exceeds the number of training examples m (m < d). Regularization (Ridge / L2) restores invertibility.',
-          hint: 'Full column rank condition on design matrix X.'
-        },
-        {
-          question: 'Compare computational complexity of Batch Gradient Descent vs Normal Equations.',
-          answer: 'Normal Equations require O(d³) for matrix inversion where d is feature dimension. Batch Gradient Descent requires O(m · d · iterations), making gradient descent superior when d is very large (e.g. d > 10,000).',
-          hint: 'Matrix inversion in d dimensions vs iterative vector steps.'
-        },
-        {
-          question: 'What is the probabilistic interpretation of least squares cost function J(θ)?',
-          answer: 'Assuming independent Gaussian noise ε ~ N(0, σ²) on targets y, minimizing squared error J(θ) is mathematically equivalent to Maximum Likelihood Estimation (MLE) of parameters θ.',
-          hint: 'Log-likelihood of a Gaussian distribution.'
-        }
-      ]
-    }
-  ]
-};
-
 export default function FlashcardPlayerPage() {
   const params = useParams();
   const router = useRouter();
@@ -102,81 +33,56 @@ export default function FlashcardPlayerPage() {
   const [loading, setLoading] = useState(true);
   const [generating, setGenerating] = useState(false);
   const [masteredCount, setMasteredCount] = useState(0);
+  const [deckError, setDeckError] = useState<string | null>(null);
 
+  // Strong Authentication Gate: Non-authenticated users are redirected back to landing page
   useEffect(() => {
     const token = authStorage.getToken();
     if (!token) {
-      router.push('/');
+      router.replace('/?auth=login');
       return;
     }
-    loadFlashcards();
+    api.getMe()
+      .then(() => {
+        loadFlashcards();
+      })
+      .catch(() => {
+        authStorage.removeToken();
+        router.replace('/?auth=login');
+      });
   }, [sessionId, router]);
 
   const loadFlashcards = async () => {
     try {
       setLoading(true);
-      const data = await api.getFlashcards(sessionId).catch(() => []);
+      const data = await api.getFlashcards(sessionId);
       if (data && data.length > 0) {
         setDecks(data);
-      } else if (FALLBACK_DECKS_MAP[sessionId]) {
-        setDecks(FALLBACK_DECKS_MAP[sessionId]);
       } else {
-        const defaultDeck: FlashcardDeck = {
-          topic: 'Active Recall Study Deck',
-          cards: [
-            {
-              question: 'What constitutes the core conceptual thesis of this study material?',
-              answer: 'Grounded mathematical provenance and deliberate active recall drills decouple retention from passive reading.',
-              hint: 'Consider the active learning primitives.'
-            },
-            {
-              question: 'How does spaced repetition prevent exponential memory decay?',
-              answer: 'Reviewing cards at expanding intervals (1d, 3d, 6d, 14d) resets the Ebbinghaus forgetting curve, transferring concepts to long-term memory.',
-              hint: 'The Leitner 4-box system.'
-            }
-          ]
-        };
-        setDecks([defaultDeck]);
+        setDecks([]);
       }
-    } catch {
-      if (FALLBACK_DECKS_MAP[sessionId]) {
-        setDecks(FALLBACK_DECKS_MAP[sessionId]);
-      }
+    } catch (err) {
+      console.error('Failed to load flashcard decks:', err);
+      setDecks([]);
     } finally {
       setLoading(false);
     }
   };
 
   const handleGenerate = async () => {
+    setDeckError(null);
     try {
       setGenerating(true);
-      const newDeck = await api.generateFlashcards(sessionId).catch(() => null);
+      const newDeck = await api.generateFlashcards(sessionId);
       if (newDeck) {
         setDecks((prev) => [newDeck, ...prev]);
-      } else {
-        const simulated: FlashcardDeck = {
-          topic: 'Synthesized Recall Deck',
-          cards: [
-            {
-              question: 'Explain the primary trade-off highlighted in this literature.',
-              answer: 'Computational parallelization requires discarding sequential hidden states in favor of matrix self-attention.',
-              hint: 'Examine computational bottlenecks.'
-            },
-            {
-              question: 'What is the mathematical justification for parameter normalization?',
-              answer: 'Scaling by dimension root preserves gradient variance within unit magnitude during backpropagation.',
-              hint: 'Variance stabilization.'
-            }
-          ]
-        };
-        setDecks((prev) => [simulated, ...prev]);
+        setCurrentDeckIndex(0);
+        setCurrentCardIndex(0);
+        setIsFlipped(false);
+        setShowHint(false);
       }
-      setCurrentDeckIndex(0);
-      setCurrentCardIndex(0);
-      setIsFlipped(false);
-      setShowHint(false);
-    } catch {
-      // Handled
+    } catch (err: any) {
+      setDeckError(err.message || 'Failed to synthesize active recall deck from literature.');
     } finally {
       setGenerating(false);
     }
@@ -280,6 +186,19 @@ export default function FlashcardPlayerPage() {
           </button>
         </div>
       </div>
+
+      {/* Error Alert */}
+      {deckError && (
+        <div className="p-3 rounded-xl bg-red-500/10 border border-red-500/30 text-red-400 text-xs font-mono flex items-center justify-between">
+          <span>{deckError}</span>
+          <button
+            onClick={() => setDeckError(null)}
+            className="text-[11px] underline hover:text-red-300 ml-2 cursor-pointer"
+          >
+            Dismiss
+          </button>
+        </div>
+      )}
 
       {cards.length === 0 ? (
         <div className="py-20 border border-dashed border-rule-border rounded-2xl flex flex-col items-center justify-center text-center p-6 space-y-4 bg-surface/30 font-sans">

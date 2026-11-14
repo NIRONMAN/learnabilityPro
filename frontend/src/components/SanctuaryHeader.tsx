@@ -3,7 +3,7 @@
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import { useTheme } from './ThemeProvider';
-import { Sun, Moon, Sparkles, Terminal, Search, Layers, BookOpen, UserCheck, ArrowRight, Activity, Command } from 'lucide-react';
+import { Sun, Moon, Sparkles, Terminal, Search, Layers, BookOpen, UserCheck, ArrowRight, Activity, Command, LogOut } from 'lucide-react';
 import { authStorage } from '@/lib/api';
 import { useState, useEffect } from 'react';
 
@@ -15,6 +15,22 @@ export function SanctuaryHeader({ onOpenCommandPalette }: { onOpenCommandPalette
   useEffect(() => {
     setHasToken(!!authStorage.getToken());
   }, [pathname]);
+
+  const handleAuthAction = () => {
+    if (typeof window !== 'undefined') {
+      if (pathname === '/') {
+        window.dispatchEvent(new CustomEvent('open-auth-modal'));
+      } else {
+        window.location.href = '/?auth=login';
+      }
+    }
+  };
+
+  const handleLogout = () => {
+    authStorage.removeToken();
+    setHasToken(false);
+    window.location.href = '/';
+  };
 
   return (
     <header className="border-b border-rule-border bg-surface/95 backdrop-blur-md sticky top-0 z-40 transition-colors duration-200">
@@ -105,23 +121,33 @@ export function SanctuaryHeader({ onOpenCommandPalette }: { onOpenCommandPalette
             )}
           </button>
 
-          {/* Direct Workspace Access */}
-          <Link
-            href="/dashboard"
-            className="px-3.5 py-1.5 rounded-md text-xs font-semibold font-mono bg-accent-cyan text-slate-950 hover:bg-accent-cyan/90 transition-all flex items-center gap-1.5 shadow-sm shadow-cyan-500/20"
-          >
-            {hasToken ? (
-              <>
+          {/* Direct Workspace Access / Auth Trigger */}
+          {hasToken ? (
+            <div className="flex items-center gap-2">
+              <Link
+                href="/dashboard"
+                className="px-3.5 py-1.5 rounded-md text-xs font-semibold font-mono bg-accent-cyan text-slate-950 hover:bg-accent-cyan/90 transition-all flex items-center gap-1.5 shadow-sm shadow-cyan-500/20"
+              >
                 <UserCheck className="w-3.5 h-3.5" />
                 <span>Workspace</span>
-              </>
-            ) : (
-              <>
-                <span>Enter Studio</span>
-                <ArrowRight className="w-3.5 h-3.5" />
-              </>
-            )}
-          </Link>
+              </Link>
+              <button
+                onClick={handleLogout}
+                title="Log Out of Scholar Session"
+                className="p-1.5 text-ink-muted hover:text-red-400 border border-rule-border rounded-md bg-surface hover:bg-surface-elevated transition-colors cursor-pointer"
+              >
+                <LogOut className="w-3.5 h-3.5" />
+              </button>
+            </div>
+          ) : (
+            <button
+              onClick={handleAuthAction}
+              className="px-3.5 py-1.5 rounded-md text-xs font-semibold font-mono bg-accent-cyan text-slate-950 hover:bg-accent-cyan/90 transition-all flex items-center gap-1.5 shadow-sm shadow-cyan-500/20 cursor-pointer"
+            >
+              <span>Enter Studio</span>
+              <ArrowRight className="w-3.5 h-3.5" />
+            </button>
+          )}
         </div>
       </div>
     </header>

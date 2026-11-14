@@ -20,71 +20,6 @@ import {
   BrainCircuit
 } from 'lucide-react';
 
-const FALLBACK_DIAGRAMS_MAP: Record<string, Diagram[]> = {
-  'vaswani-2017-demo': [
-    {
-      id: 'diag-vaswani-1',
-      sessionId: 'vaswani-2017-demo',
-      diagramType: 'FLOWCHART',
-      title: 'Transformer Architecture & Attention Flow',
-      mermaidCode: `graph TD
-    classDef inputStyle fill:#182032,stroke:#38BDF8,stroke-width:1.5px,color:#F8FAFC;
-    classDef coreStyle fill:#111622,stroke:#34D399,stroke-width:2px,color:#F8FAFC;
-    classDef denseStyle fill:#182032,stroke:#818CF8,stroke-width:1.5px,color:#F8FAFC;
-
-    Tokens["Input Tokens x_1...x_n"]:::inputStyle --> Emb["Token Embedding + Sinusoidal PE"]:::inputStyle
-    Emb --> MultiHead["Multi-Head Attention (h=8)"]:::coreStyle
-    MultiHead --> Norm1["Add & LayerNorm"]:::inputStyle
-    Norm1 --> FFN["Feed Forward Network (d_ff=2048)"]:::denseStyle
-    FFN --> Norm2["Add & LayerNorm"]:::inputStyle
-    Norm2 --> Linear["Linear Projection"]:::inputStyle
-    Linear --> Softmax["Softmax Probabilities"]:::coreStyle`,
-      explanation: 'Visualizing token flow through positional encodings, multi-head attention sublayers, and residual feed-forward transformations.',
-      createdAt: new Date().toISOString(),
-    }
-  ],
-  'deepseek-r1-demo': [
-    {
-      id: 'diag-deepseek-1',
-      sessionId: 'deepseek-r1-demo',
-      diagramType: 'FLOWCHART',
-      title: 'DeepSeek-R1: Multi-Stage RL & Distillation Pipeline',
-      mermaidCode: `flowchart TD
-    classDef stage fill:#182032,stroke:#38BDF8,stroke-width:1.5px,color:#F8FAFC;
-    classDef rl fill:#111622,stroke:#34D399,stroke-width:2px,color:#F8FAFC;
-    classDef dist fill:#182032,stroke:#FBBF24,stroke-width:1.5px,color:#F8FAFC;
-
-    Base["DeepSeek-V3-Base"]:::stage --> ColdStart["Cold-Start SFT (Curated CoT)"]:::stage
-    ColdStart --> R1Zero["Reasoning Exploration (GRPO)"]:::rl
-    R1Zero --> RuleReward["Rule-Based Verification (Math & Code)"]:::rl
-    RuleReward --> R1["DeepSeek-R1 (Flagship)"]:::rl
-    R1 --> SFT800K["800K Curated Traces"]:::dist
-    SFT800K --> Student["Distilled Dense Models (1.5B - 32B)"]:::dist`,
-      explanation: 'Two-stage reinforcement learning with rule-based reward verification and reasoning trace distillation.',
-      createdAt: new Date().toISOString(),
-    }
-  ],
-  'cs229-demo': [
-    {
-      id: 'diag-cs229-1',
-      sessionId: 'cs229-demo',
-      diagramType: 'FLOWCHART',
-      title: 'Supervised Learning & Normal Equations Derivation',
-      mermaidCode: `flowchart LR
-    classDef feature fill:#182032,stroke:#38BDF8,stroke-width:1.5px,color:#F8FAFC;
-    classDef cost fill:#111622,stroke:#818CF8,stroke-width:2px,color:#F8FAFC;
-    classDef sol fill:#182032,stroke:#34D399,stroke-width:2px,color:#F8FAFC;
-
-    Data["Design Matrix X in R^{m x d}"]:::feature --> Hypothesis["Hypothesis h_theta(x) = X theta"]:::feature
-    Hypothesis --> Cost["Cost J(theta) = 1/2 ||X theta - y||^2"]:::cost
-    Cost --> Deriv["Matrix Derivative: X^T X theta - X^T y = 0"]:::cost
-    Deriv --> NormalEq["Optimal: theta* = (X^T X)^{-1} X^T y"]:::sol`,
-      explanation: 'Matrix calculus derivation minimizing squared Euclidean distance onto the column space of design matrix X.',
-      createdAt: new Date().toISOString(),
-    }
-  ]
-};
-
 export default function DiagramPage() {
   const params = useParams();
   const router = useRouter();
@@ -98,55 +33,42 @@ export default function DiagramPage() {
   const [zoomLevel, setZoomLevel] = useState(1);
   const [showRawCode, setShowRawCode] = useState(false);
   const [copied, setCopied] = useState(false);
+  const [diagramError, setDiagramError] = useState<string | null>(null);
 
   const containerRef = useRef<HTMLDivElement>(null);
 
+  // Strong Authentication Gate: Non-authenticated users are redirected back to landing page
   useEffect(() => {
     const token = authStorage.getToken();
     if (!token) {
-      router.push('/');
+      router.replace('/?auth=login');
       return;
     }
-    loadDiagrams();
+    api.getMe()
+      .then(() => {
+        loadDiagrams();
+      })
+      .catch(() => {
+        authStorage.removeToken();
+        router.replace('/?auth=login');
+      });
   }, [sessionId, router]);
 
   const loadDiagrams = async () => {
     try {
       setLoading(true);
-      const data = await api.getDiagrams(sessionId).catch(() => []);
+      const data = await api.getDiagrams(sessionId);
       if (data && data.length > 0) {
         setDiagrams(data);
         setSelectedDiagram(data[0]);
-      } else if (FALLBACK_DIAGRAMS_MAP[sessionId]) {
-        const fallbacks = FALLBACK_DIAGRAMS_MAP[sessionId];
-        setDiagrams(fallbacks);
-        setSelectedDiagram(fallbacks[0]);
       } else {
-        const defaultDiag: Diagram = {
-          id: 'default-diag-' + sessionId,
-          sessionId,
-          diagramType: 'FLOWCHART',
-          title: 'Concept Dependency Graph',
-          mermaidCode: `graph TD
-    classDef nodeStyle fill:#182032,stroke:#38BDF8,stroke-width:1.5px,color:#F8FAFC;
-    classDef rootStyle fill:#111622,stroke:#34D399,stroke-width:2px,color:#F8FAFC;
-
-    Core["Fundamental Axioms"]:::rootStyle --> Thm1["Primary Theorem"]:::nodeStyle
-    Core --> Thm2["Secondary Lemma"]:::nodeStyle
-    Thm1 --> Synthesis["Unified Synthesis"]:::rootStyle
-    Thm2 --> Synthesis:::rootStyle`,
-          explanation: 'Directed conceptual hierarchy mapping prerequisite concepts to core theorems.',
-          createdAt: new Date().toISOString(),
-        };
-        setDiagrams([defaultDiag]);
-        setSelectedDiagram(defaultDiag);
+        setDiagrams([]);
+        setSelectedDiagram(null);
       }
-    } catch {
-      if (FALLBACK_DIAGRAMS_MAP[sessionId]) {
-        const fallbacks = FALLBACK_DIAGRAMS_MAP[sessionId];
-        setDiagrams(fallbacks);
-        setSelectedDiagram(fallbacks[0]);
-      }
+    } catch (err) {
+      console.error('Failed to load diagrams:', err);
+      setDiagrams([]);
+      setSelectedDiagram(null);
     } finally {
       setLoading(false);
     }
@@ -154,35 +76,17 @@ export default function DiagramPage() {
 
   const handleGenerate = async (e?: React.FormEvent) => {
     if (e) e.preventDefault();
+    setDiagramError(null);
     try {
       setGenerating(true);
-      const newDiagram = await api.generateDiagram(sessionId, customPrompt).catch(() => null);
-
+      const newDiagram = await api.generateDiagram(sessionId, customPrompt);
       if (newDiagram) {
         setDiagrams((prev) => [newDiagram, ...prev]);
         setSelectedDiagram(newDiagram);
-      } else {
-        const simulated: Diagram = {
-          id: 'sim-' + Date.now(),
-          sessionId,
-          diagramType: 'FLOWCHART',
-          title: customPrompt || 'Grounded Architecture DAG',
-          mermaidCode: `flowchart TD
-    classDef nodeStyle fill:#182032,stroke:#38BDF8,stroke-width:1.5px,color:#F8FAFC;
-    classDef coreStyle fill:#111622,stroke:#34D399,stroke-width:2px,color:#F8FAFC;
-
-    A["Hypothesis: ${customPrompt || 'Literature Topic'}"]:::coreStyle --> B["Mathematical Formulation"]:::nodeStyle
-    B --> C["Optimization Objective"]:::nodeStyle
-    C --> D["Empirical Proof & Validation"]:::coreStyle`,
-          explanation: 'Grounded concept hierarchy synthesized from research literature.',
-          createdAt: new Date().toISOString(),
-        };
-        setDiagrams((prev) => [simulated, ...prev]);
-        setSelectedDiagram(simulated);
+        setCustomPrompt('');
       }
-      setCustomPrompt('');
-    } catch {
-      // Handled in catch
+    } catch (err: any) {
+      setDiagramError(err.message || 'Failed to synthesize mindmap from literature.');
     } finally {
       setGenerating(false);
     }
@@ -362,6 +266,19 @@ export default function DiagramPage() {
         </button>
       </form>
 
+      {/* Error Alert */}
+      {diagramError && (
+        <div className="p-3 rounded-xl bg-red-500/10 border border-red-500/30 text-red-400 text-xs font-mono flex items-center justify-between">
+          <span>{diagramError}</span>
+          <button
+            onClick={() => setDiagramError(null)}
+            className="text-[11px] underline hover:text-red-300 ml-2 cursor-pointer"
+          >
+            Dismiss
+          </button>
+        </div>
+      )}
+
       {/* Viewer Panel */}
       <div className="space-y-4">
         {diagrams.length > 1 && (
@@ -382,7 +299,15 @@ export default function DiagramPage() {
           </div>
         )}
 
-        {showRawCode ? (
+        {!selectedDiagram ? (
+          <div className="p-12 rounded-xl bg-surface border border-dashed border-rule-border text-center space-y-3 font-sans">
+            <Network className="w-8 h-8 text-accent-amber mx-auto" />
+            <h4 className="text-sm font-bold text-ink-primary font-mono">No mindmap generated yet for this session</h4>
+            <p className="text-xs text-ink-muted max-w-sm mx-auto">
+              Enter a concept focus above or click &quot;Synthesize Mindmap&quot; to generate an architectural directed graph from your literature.
+            </p>
+          </div>
+        ) : showRawCode ? (
           <div className="p-5 rounded-xl bg-surface border border-rule-border font-mono text-xs overflow-x-auto shadow-sm">
             <div className="flex items-center justify-between text-ink-muted mb-3 pb-2 border-b border-rule-border">
               <span>Mermaid Definition</span>

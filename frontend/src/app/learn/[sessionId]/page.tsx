@@ -22,40 +22,6 @@ import {
   ChevronRight
 } from 'lucide-react';
 
-const DEMO_SESSIONS_MAP: Record<string, StudySession> = {
-  'vaswani-2017-demo': {
-    id: 'vaswani-2017-demo',
-    userId: 'scholar-user',
-    title: 'Attention Is All You Need (Vaswani et al. 2017)',
-    sessionType: 'LEARN',
-    contextType: 'PDF',
-    contextText: `§ 3.2 Multi-Head Attention Mechanism\nAn attention function can be described as mapping a query and a set of key-value pairs to an output, where the query, keys, values, and output are all vectors. The output is computed as a weighted sum of the values, where the weight assigned to each value is computed by a compatibility function of the query with the corresponding key.\n\nAttention(Q, K, V) = softmax(QKᵀ / √d_k)V\n\nDividing by √d_k prevents the dot products from growing excessively large for large key dimensions, avoiding saturation in regions of vanishing gradients.\n\n§ 4.0 Complexity Analysis\nMaximum path length between any two word positions is strictly O(1) in self-attention, compared to O(n) in recurrent layers, enabling full parallelization across training tokens.`,
-    createdAt: new Date().toISOString(),
-    updatedAt: new Date().toISOString(),
-  },
-  'deepseek-r1-demo': {
-    id: 'deepseek-r1-demo',
-    userId: 'scholar-user',
-    title: 'DeepSeek-R1: Mathematical Reasoning via GRPO',
-    sessionType: 'LEARN',
-    contextType: 'TOPIC',
-    contextText: `§ 2.1 Rule-Based Reward Verification\nTraditional RLHF relies on neural reward models that suffer from reward hacking and drift during long chain-of-thought exploration. DeepSeek-R1 enforces deterministic rule-based verification: compiler pass/fail execution for code and ground-truth symbolic equivalence for mathematical proofs.\n\n§ 3.1 Group Relative Policy Optimization (GRPO)\nTo mitigate the substantial memory overhead of training a separate value network equal in size to the policy model, GRPO samples a group of G candidate outputs for each query and computes normalized relative advantages across the sampled group.\n\nJ_GRPO(θ) = E [ 1/G ∑ (min(r_i A_i, clip(...)A_i)) - β D_KL(π_θ || π_ref) ]`,
-    createdAt: new Date().toISOString(),
-    updatedAt: new Date().toISOString(),
-  },
-  'cs229-demo': {
-    id: 'cs229-demo',
-    userId: 'scholar-user',
-    title: 'Stanford CS229: Gradient Descent & Normal Equations',
-    sessionType: 'LEARN',
-    contextType: 'YOUTUBE',
-    sourceUrl: 'https://www.youtube.com/watch?v=jGwO_UgTS7I',
-    contextText: `§ 1.1 Supervised Learning & Linear Regression\nTo perform supervised learning, we define the cost function J(θ) measuring the squared difference between hypothesis h_θ(x) and ground truth targets y. The batch gradient descent update repeatedly steps in the negative gradient direction across all training examples.\n\n§ 1.2 The Normal Equations\nRather than iterating with gradient descent, the optimal parameters θ that minimize J(θ) can be computed directly in closed form using matrix derivatives and setting the gradient ∇_θ J(θ) to zero.\n\nθ = (XᵀX)⁻¹ Xᵀy\n\nProvided X has full column rank, XᵀX is strictly invertible, providing the global minimum in O(d³) algebraic matrix operations.`,
-    createdAt: new Date().toISOString(),
-    updatedAt: new Date().toISOString(),
-  }
-};
-
 export default function LearnWorkspacePage() {
   const params = useParams();
   const router = useRouter();
@@ -68,16 +34,25 @@ export default function LearnWorkspacePage() {
   const [isStreaming, setIsStreaming] = useState(false);
   const [loading, setLoading] = useState(true);
   const [copiedContext, setCopiedContext] = useState(false);
+  const [streamError, setStreamError] = useState<string | null>(null);
 
   const messagesEndRef = useRef<HTMLDivElement>(null);
 
+  // Strong Authentication Gate: Non-authenticated users are redirected back to landing page
   useEffect(() => {
     const token = authStorage.getToken();
     if (!token) {
-      router.push('/');
+      router.replace('/?auth=login');
       return;
     }
-    loadData();
+    api.getMe()
+      .then(() => {
+        loadData();
+      })
+      .catch(() => {
+        authStorage.removeToken();
+        router.replace('/?auth=login');
+      });
   }, [sessionId, router]);
 
   useEffect(() => {
@@ -88,52 +63,14 @@ export default function LearnWorkspacePage() {
     try {
       setLoading(true);
       const [sessionData, messageData] = await Promise.all([
-        api.getSession(sessionId).catch(() => null),
-        api.getMessages(sessionId).catch(() => []),
+        api.getSession(sessionId),
+        api.getMessages(sessionId),
       ]);
-
-      if (sessionData) {
-        setSession(sessionData);
-        setMessages(messageData || []);
-      } else if (DEMO_SESSIONS_MAP[sessionId]) {
-        const demo = DEMO_SESSIONS_MAP[sessionId];
-        setSession(demo);
-        setMessages([
-          {
-            id: 'demo-welcome',
-            sessionId,
-            sender: 'ASSISTANT',
-            content: `Welcome to the Socratic study sanctuary for "${demo.title}". The context is verified and indexed into vector memory. Ask any conceptual question, query a proof step, or challenge my reasoning.`,
-            createdAt: new Date().toISOString(),
-          }
-        ]);
-      } else {
-        // Fallback generic session
-        const generic: StudySession = {
-          id: sessionId,
-          userId: 'local-user',
-          title: 'Active Research Sanctuary',
-          sessionType: 'LEARN',
-          contextType: 'TOPIC',
-          contextText: 'Grounded active learning session. Formulate hypotheses and interrogate theoretical literature with Socratic guidance.',
-          createdAt: new Date().toISOString(),
-          updatedAt: new Date().toISOString(),
-        };
-        setSession(generic);
-        setMessages([
-          {
-            id: 'init-msg',
-            sessionId,
-            sender: 'ASSISTANT',
-            content: 'Study sanctuary initialized. What literature, formula, or proof would you like to explore today?',
-            createdAt: new Date().toISOString(),
-          }
-        ]);
-      }
-    } catch {
-      if (DEMO_SESSIONS_MAP[sessionId]) {
-        setSession(DEMO_SESSIONS_MAP[sessionId]);
-      }
+      setSession(sessionData);
+      setMessages(messageData || []);
+    } catch (err) {
+      console.error('Failed to load session from server:', err);
+      setSession(null);
     } finally {
       setLoading(false);
     }
@@ -150,6 +87,7 @@ export default function LearnWorkspacePage() {
     const userMsg = (customPrompt || inputText).trim();
     if (!userMsg || isStreaming) return;
     setInputText('');
+    setStreamError(null);
 
     const optimisticUserMessage: ChatMessage = {
       id: 'temp-' + Date.now(),
@@ -176,7 +114,7 @@ export default function LearnWorkspacePage() {
         () => {
           setIsStreaming(false);
           const assistantMessage: ChatMessage = {
-            id: 'temp-assistant-' + Date.now(),
+            id: 'assistant-' + Date.now(),
             sessionId,
             sender: 'ASSISTANT',
             content: accumulatedTokens,
@@ -185,53 +123,17 @@ export default function LearnWorkspacePage() {
           setMessages((prev) => [...prev, assistantMessage]);
           setStreamingResponse('');
         },
-        () => {
-          // Fallback to grounded local synthesis if stream endpoint is unavailable
-          fallbackGenerateResponse(userMsg);
+        (err) => {
+          setIsStreaming(false);
+          setStreamingResponse('');
+          setStreamError(err.message || 'Stream connection interrupted. Please try again.');
         }
       );
-    } catch {
-      fallbackGenerateResponse(userMsg);
+    } catch (err: any) {
+      setIsStreaming(false);
+      setStreamingResponse('');
+      setStreamError(err.message || 'Failed to connect to AI tutor streaming endpoint.');
     }
-  };
-
-  const fallbackGenerateResponse = (query: string) => {
-    const lower = query.toLowerCase();
-    let reply = '';
-
-    if (lower.includes('scale') || lower.includes('root') || lower.includes('d_k')) {
-      reply =
-        'Dividing by √d_k is mathematically necessary to preserve unit variance. Under the assumption that components of q and k are independent random variables with mean 0 and variance 1, their dot product has variance d_k. For large d_k, dot products grow substantially, pushing softmax into flat regions with near-zero gradients. Scaling by 1/√d_k restores variance to 1.';
-    } else if (lower.includes('grpo') || lower.includes('critic') || lower.includes('reward')) {
-      reply =
-        'Group Relative Policy Optimization eliminates the need for an explicit value network (critic) by sampling multiple outputs {o_1, ..., o_G} per prompt. The baseline is directly computed from the group empirical mean and standard deviation: A_i = (R_i - mean(R)) / std(R). This drastically reduces GPU memory overhead while maintaining policy gradient stability.';
-    } else if (lower.includes('normal') || lower.includes('invert') || lower.includes('gradient')) {
-      reply =
-        'The Normal Equations θ = (XᵀX)⁻¹ Xᵀy minimize the quadratic cost function J(θ) in a single step by setting the matrix derivative ∇_θ J(θ) = 0. However, if features are collinear or the sample size m < d, XᵀX is singular (non-invertible). In such regimes, gradient descent with regularization is numerically preferred.';
-    } else {
-      reply = `In reference to "${session?.title}": The mechanism establishes mathematical provenance by anchoring representations to verified source literature. Notice how each transformation avoids ungrounded extrapolation and retains verifiable token dependencies.`;
-    }
-
-    let i = 0;
-    const interval = setInterval(() => {
-      i += 4;
-      setStreamingResponse(reply.slice(0, i));
-      if (i >= reply.length) {
-        clearInterval(interval);
-        setIsStreaming(false);
-        setMessages((prev) => [
-          ...prev,
-          {
-            id: 'a-' + Date.now(),
-            sessionId,
-            sender: 'ASSISTANT',
-            content: reply,
-            createdAt: new Date().toISOString(),
-          }
-        ]);
-        setStreamingResponse('');
-      }
-    }, 20);
   };
 
   const getYouTubeEmbedUrl = (url?: string) => {
@@ -431,6 +333,19 @@ export default function LearnWorkspacePage() {
                 <div className="max-w-[85%] rounded-xl px-4 py-3 text-xs leading-relaxed bg-surface border border-accent-cyan/30 text-ink-primary shadow-sm">
                   <p className="whitespace-pre-wrap">{streamingResponse || 'Retrieving source vectors...'}</p>
                 </div>
+              </div>
+            )}
+
+            {/* Real error feedback banner */}
+            {streamError && (
+              <div className="p-3 rounded-xl bg-red-500/10 border border-red-500/30 text-red-400 text-xs font-mono flex items-center justify-between">
+                <span>{streamError}</span>
+                <button
+                  onClick={() => setStreamError(null)}
+                  className="text-[11px] underline hover:text-red-300 ml-2 cursor-pointer"
+                >
+                  Dismiss
+                </button>
               </div>
             )}
 

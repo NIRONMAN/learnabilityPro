@@ -88,6 +88,9 @@ async function request<T>(path: string, options: RequestInit = {}): Promise<T> {
   });
 
   if (!res.ok) {
+    if (res.status === 401) {
+      authStorage.removeToken();
+    }
     const errorBody = await res.json().catch(() => ({ detail: res.statusText }));
     throw new Error(errorBody.detail || errorBody.message || 'API request failed');
   }
@@ -141,6 +144,9 @@ export const api = {
       });
 
       if (!response.ok) {
+        if (response.status === 401) {
+          authStorage.removeToken();
+        }
         throw new Error(`Stream failed with status ${response.status}`);
       }
 

@@ -26,42 +26,9 @@ import {
   Filter
 } from 'lucide-react';
 
-const FALLBACK_DEMO_SESSIONS: StudySession[] = [
-  {
-    id: 'vaswani-2017-demo',
-    userId: 'scholar-user',
-    title: 'Attention Is All You Need (Vaswani et al. 2017)',
-    sessionType: 'LEARN',
-    contextType: 'PDF',
-    contextText: 'The Transformer model relies entirely on self-attention mechanisms to compute representations of input and output without sequence-aligned RNNs or convolutions. Dot product scaling by 1/√d_k stabilizes softmax gradients for large representation dimensions.',
-    createdAt: new Date(Date.now() - 3600000 * 2).toISOString(),
-    updatedAt: new Date(Date.now() - 3600000 * 2).toISOString(),
-  },
-  {
-    id: 'deepseek-r1-demo',
-    userId: 'scholar-user',
-    title: 'DeepSeek-R1: Mathematical Reasoning via GRPO',
-    sessionType: 'FLASHCARD',
-    contextType: 'TOPIC',
-    contextText: 'Group Relative Policy Optimization (GRPO) samples groups of candidate outputs to calculate relative advantages without needing a separate critic network. Rule-based rewards verify mathematical proofs with deterministic accuracy.',
-    createdAt: new Date(Date.now() - 3600000 * 24).toISOString(),
-    updatedAt: new Date(Date.now() - 3600000 * 24).toISOString(),
-  },
-  {
-    id: 'cs229-demo',
-    userId: 'scholar-user',
-    title: 'Stanford CS229: Gradient Descent & Normal Equations',
-    sessionType: 'DIAGRAM',
-    contextType: 'YOUTUBE',
-    sourceUrl: 'https://www.youtube.com/watch?v=jGwO_UgTS7I',
-    contextText: 'Closed-form parameter optimization using the Normal Equations θ = (XᵀX)⁻¹ Xᵀy vs iterative batch gradient descent. Convex loss surfaces guarantee global minimum convergence.',
-    createdAt: new Date(Date.now() - 3600000 * 48).toISOString(),
-    updatedAt: new Date(Date.now() - 3600000 * 48).toISOString(),
-  }
-];
-
 export default function DashboardPage() {
   const router = useRouter();
+  const [currentUser, setCurrentUser] = useState<any>(null);
   const [sessions, setSessions] = useState<StudySession[]>([]);
   const [loading, setLoading] = useState(true);
   const [filterType, setFilterType] = useState<string>('ALL');
@@ -78,27 +45,32 @@ export default function DashboardPage() {
   const [submitting, setSubmitting] = useState(false);
   const [modalError, setModalError] = useState<string | null>(null);
 
+  // Strong Authentication Gate: Non-authenticated users are redirected back to landing page
   useEffect(() => {
     const token = authStorage.getToken();
     if (!token) {
-      router.push('/');
+      router.replace('/?auth=login');
       return;
     }
-    loadSessions();
+    api.getMe()
+      .then((user) => {
+        setCurrentUser(user);
+        loadSessions();
+      })
+      .catch(() => {
+        authStorage.removeToken();
+        router.replace('/?auth=login');
+      });
   }, [router]);
 
   const loadSessions = async () => {
     try {
       setLoading(true);
       const data = await api.listSessions();
-      if (data && data.length > 0) {
-        setSessions(data);
-      } else {
-        setSessions(FALLBACK_DEMO_SESSIONS);
-      }
-    } catch {
-      // If unauthorized or network error, provide demo fallback sessions
-      setSessions(FALLBACK_DEMO_SESSIONS);
+      setSessions(data || []);
+    } catch (err) {
+      console.error('Failed to load sessions:', err);
+      setSessions([]);
     } finally {
       setLoading(false);
     }
@@ -111,10 +83,10 @@ export default function DashboardPage() {
 
     try {
       if (modalMode === 'PDF') {
-        if (!selectedFile) throw new Error('Please select a PDF file');
+        if (!selectedFile) throw new Error('Please select a PDF file to upload');
         await api.uploadPdf(selectedFile);
       } else if (modalMode === 'YOUTUBE') {
-        if (!youtubeUrl) throw new Error('Please enter a YouTube URL');
+        if (!youtubeUrl) throw new Error('Please enter a valid YouTube URL');
         await api.ingestYouTube({ url: youtubeUrl, title: newTitle });
       } else {
         await api.createSession({
@@ -129,23 +101,43 @@ export default function DashboardPage() {
       resetModal();
       await loadSessions();
     } catch (err: any) {
-      // If backend fails, add a local session
-      const newLocalSession: StudySession = {
-        id: 'session-' + Date.now(),
-        userId: 'local-user',
-        title: newTitle || 'New Study Session',
-        sessionType,
-        contextType: modalMode,
-        contextText: contextText || 'Self-directed research and active inquiry notes.',
-        sourceUrl: youtubeUrl || undefined,
-        createdAt: new Date().toISOString(),
-        updatedAt: new Date().toISOString(),
-      };
-      setSessions((prev) => [newLocalSession, ...prev]);
-      setShowModal(false);
-      resetModal();
+      setModalError(err.message || 'Failed to create session on server.');
     } finally {
       setSubmitting(false);
+    }
+  };
+
+  const handleInitializeStarter = async (starterType: 'vaswani' | 'deepseek' | 'cs229') => {
+    try {
+      setLoading(true);
+      if (starterType === 'vaswani') {
+        await api.createSession({
+          title: 'Attention Is All You Need (Vaswani et al. 2017)',
+          sessionType: 'LEARN',
+          contextType: 'PDF',
+          contextText: '§ 3.2 Multi-Head Attention Mechanism\nAn attention function can be described as mapping a query and a set of key-value pairs to an output, where the query, keys, values, and output are all vectors. The output is computed as a weighted sum of the values, where the weight assigned to each value is computed by a compatibility function of the query with the corresponding key.\n\nAttention(Q, K, V) = softmax(QKᵀ / √d_k)V\n\nDividing by √d_k prevents the dot products from growing excessively large for large key dimensions, avoiding saturation in regions of vanishing gradients.\n\n§ 4.0 Complexity Analysis\nMaximum path length between any two word positions is strictly O(1) in self-attention, compared to O(n) in recurrent layers, enabling full parallelization across training tokens.'
+        });
+      } else if (starterType === 'deepseek') {
+        await api.createSession({
+          title: 'DeepSeek-R1: Mathematical Reasoning via GRPO',
+          sessionType: 'FLASHCARD',
+          contextType: 'TOPIC',
+          contextText: '§ 2.1 Rule-Based Reward Verification\nTraditional RLHF relies on neural reward models that suffer from reward hacking and drift during long chain-of-thought exploration. DeepSeek-R1 enforces deterministic rule-based verification: compiler pass/fail execution for code and ground-truth symbolic equivalence for mathematical proofs.\n\n§ 3.1 Group Relative Policy Optimization (GRPO)\nTo mitigate the substantial memory overhead of training a separate value network equal in size to the policy model, GRPO samples a group of G candidate outputs for each query and computes normalized relative advantages across the sampled group.\n\nJ_GRPO(θ) = E [ 1/G ∑ (min(r_i A_i, clip(...)A_i)) - β D_KL(π_θ || π_ref) ]'
+        });
+      } else if (starterType === 'cs229') {
+        await api.createSession({
+          title: 'Stanford CS229: Gradient Descent & Normal Equations',
+          sessionType: 'DIAGRAM',
+          contextType: 'YOUTUBE',
+          sourceUrl: 'https://www.youtube.com/watch?v=jGwO_UgTS7I',
+          contextText: '§ 1.1 Supervised Learning & Linear Regression\nTo perform supervised learning, we define the cost function J(θ) measuring the squared difference between hypothesis h_θ(x) and ground truth targets y. The batch gradient descent update repeatedly steps in the negative gradient direction across all training examples.\n\n§ 1.2 The Normal Equations\nRather than iterating with gradient descent, the optimal parameters θ that minimize J(θ) can be computed directly in closed form using matrix derivatives and setting the gradient ∇_θ J(θ) to zero.\n\nθ = (XᵀX)⁻¹ Xᵀy\n\nProvided X has full column rank, XᵀX is strictly invertible, providing the global minimum in O(d³) algebraic matrix operations.'
+        });
+      }
+      await loadSessions();
+    } catch (err: any) {
+      console.error('Failed to initialize starter:', err);
+    } finally {
+      setLoading(false);
     }
   };
 
@@ -291,20 +283,42 @@ export default function DashboardPage() {
           Indexing study sanctuaries...
         </div>
       ) : filteredSessions.length === 0 ? (
-        <div className="py-20 border border-dashed border-rule-border rounded-2xl flex flex-col items-center justify-center text-center p-6 space-y-3 bg-surface/30 font-sans">
+        <div className="py-16 border border-dashed border-rule-border rounded-2xl flex flex-col items-center justify-center text-center p-6 space-y-4 bg-surface/30 font-sans">
           <div className="p-3 bg-surface-elevated text-ink-muted rounded-xl border border-rule-border">
             <FolderOpen className="w-8 h-8 text-accent-cyan" />
           </div>
-          <h3 className="text-base font-bold text-ink-primary font-mono">No study sanctuaries found</h3>
-          <p className="text-xs text-ink-body max-w-sm">
-            Ingest research literature (PDF, arXiv, or YouTube) to start grounded AI interrogation and active recall.
-          </p>
-          <button
-            onClick={() => setShowModal(true)}
-            className="mt-2 px-4 py-2 bg-accent-cyan text-slate-950 font-bold rounded-lg text-xs font-mono transition-colors cursor-pointer"
-          >
-            Create Your First Sanctuary
-          </button>
+          <div>
+            <h3 className="text-base font-bold text-ink-primary font-mono">No study sanctuaries found</h3>
+            <p className="text-xs text-ink-body max-w-sm mt-1">
+              Create your own custom session or initialize a curated research sanctuary directly into your database.
+            </p>
+          </div>
+          <div className="flex flex-wrap items-center justify-center gap-2 pt-2">
+            <button
+              onClick={() => setShowModal(true)}
+              className="px-4 py-2 bg-accent-cyan text-slate-950 font-bold rounded-lg text-xs font-mono transition-colors cursor-pointer shadow-sm"
+            >
+              + Create Custom Sanctuary
+            </button>
+            <button
+              onClick={() => handleInitializeStarter('vaswani')}
+              className="px-3.5 py-2 border border-rule-border bg-surface hover:bg-surface-elevated text-ink-primary rounded-lg text-xs font-mono transition-colors cursor-pointer"
+            >
+              + Add Attention (Vaswani 2017)
+            </button>
+            <button
+              onClick={() => handleInitializeStarter('deepseek')}
+              className="px-3.5 py-2 border border-rule-border bg-surface hover:bg-surface-elevated text-ink-primary rounded-lg text-xs font-mono transition-colors cursor-pointer"
+            >
+              + Add DeepSeek-R1 (GRPO)
+            </button>
+            <button
+              onClick={() => handleInitializeStarter('cs229')}
+              className="px-3.5 py-2 border border-rule-border bg-surface hover:bg-surface-elevated text-ink-primary rounded-lg text-xs font-mono transition-colors cursor-pointer"
+            >
+              + Add CS229 (Optimization)
+            </button>
+          </div>
         </div>
       ) : (
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5">
