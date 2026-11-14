@@ -3,6 +3,7 @@ package com.learnabilitypro.learnability.controller;
 import com.learnabilitypro.learnability.domain.dto.DiagramDto;
 import com.learnabilitypro.learnability.domain.dto.FlashcardDeckDto;
 import com.learnabilitypro.learnability.domain.dto.FlashcardDto;
+import com.learnabilitypro.learnability.domain.dto.FlashcardReadinessDto;
 import com.learnabilitypro.learnability.domain.entity.Flashcard;
 import com.learnabilitypro.learnability.domain.entity.FlashcardDeck;
 import com.learnabilitypro.learnability.security.UserPrincipal;
@@ -30,13 +31,23 @@ public class StudyController {
         this.mindmapService = mindmapService;
     }
 
+    @GetMapping("/{sessionId}/flashcards/readiness")
+    @Operation(summary = "Evaluate whether the session has sufficient learning context for active recall flashcards")
+    public ResponseEntity<FlashcardReadinessDto> checkFlashcardReadiness(
+            @PathVariable UUID sessionId,
+            @AuthenticationPrincipal UserPrincipal principal) {
+        return ResponseEntity.ok(flashcardService.checkReadiness(sessionId, principal.getId()));
+    }
+
     @PostMapping("/{sessionId}/flashcards")
     @Operation(summary = "Generate a strongly-typed flashcard deck for active recall")
     public ResponseEntity<FlashcardDeckDto> generateFlashcards(
             @PathVariable UUID sessionId,
             @RequestParam(required = false) String topic,
+            @RequestParam(required = false, defaultValue = "false") boolean force,
+            @RequestParam(required = false) String customContext,
             @AuthenticationPrincipal UserPrincipal principal) {
-        return ResponseEntity.ok(flashcardService.generateFlashcards(sessionId, principal.getId(), topic));
+        return ResponseEntity.ok(flashcardService.generateFlashcards(sessionId, principal.getId(), topic, force, customContext));
     }
 
     @GetMapping("/{sessionId}/flashcards")
@@ -47,9 +58,10 @@ public class StudyController {
         List<FlashcardDeck> decks = flashcardService.getSessionDecks(sessionId, principal.getId());
         List<FlashcardDeckDto> dtos = decks.stream()
                 .map(deck -> new FlashcardDeckDto(
+                        deck.getId(),
                         deck.getTopic(),
                         deck.getFlashcards().stream()
-                                .map(f -> new FlashcardDto(f.getQuestion(), f.getAnswer(), f.getHint()))
+                                .map(f -> new FlashcardDto(f.getId(), f.getQuestion(), f.getAnswer(), f.getHint()))
                                 .toList()
                 ))
                 .toList();

@@ -35,14 +35,25 @@ export interface ChatMessage {
 }
 
 export interface Flashcard {
+  id?: string;
   question: string;
   answer: string;
   hint?: string;
 }
 
 export interface FlashcardDeck {
+  id?: string;
   topic: string;
   cards: Flashcard[];
+}
+
+export interface FlashcardReadiness {
+  hasSufficientContext: boolean;
+  topic: string;
+  reason: string;
+  keyConcepts: string[];
+  messageCount: number;
+  hasDocumentContext: boolean;
 }
 
 export interface Diagram {
@@ -193,10 +204,25 @@ export const api = {
   },
 
   // Study Tools
-  generateFlashcards: (sessionId: string, topic?: string) =>
-    request<FlashcardDeck>(`/study/${sessionId}/flashcards${topic ? `?topic=${encodeURIComponent(topic)}` : ''}`, {
+  checkFlashcardReadiness: (sessionId: string) =>
+    request<FlashcardReadiness>(`/study/${sessionId}/flashcards/readiness`),
+  generateFlashcards: (
+    sessionId: string,
+    options?: string | { topic?: string; force?: boolean; customContext?: string }
+  ) => {
+    const params = new URLSearchParams();
+    if (typeof options === 'string') {
+      if (options.trim()) params.append('topic', options.trim());
+    } else if (options) {
+      if (options.topic) params.append('topic', options.topic);
+      if (options.force) params.append('force', 'true');
+      if (options.customContext) params.append('customContext', options.customContext);
+    }
+    const qs = params.toString();
+    return request<FlashcardDeck>(`/study/${sessionId}/flashcards${qs ? `?${qs}` : ''}`, {
       method: 'POST',
-    }),
+    });
+  },
   getFlashcards: (sessionId: string) => request<FlashcardDeck[]>(`/study/${sessionId}/flashcards`),
   updateMastery: (cardId: string, level: number) =>
     request<void>(`/study/flashcards/${cardId}/mastery?level=${level}`, { method: 'PUT' }),
