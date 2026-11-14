@@ -169,33 +169,38 @@ export const api = {
       if (!reader) throw new Error('No readable stream available');
 
       let buffer = '';
-      while (true) {
-        const { value, done } = await reader.read();
-        if (done) break;
+      try {
+        while (true) {
+          const { value, done } = await reader.read();
+          if (done) break;
 
-        buffer += decoder.decode(value, { stream: true });
-        const lines = buffer.split('\n');
-        buffer = lines.pop() || '';
+          buffer += decoder.decode(value, { stream: true });
+          const lines = buffer.split('\n');
+          buffer = lines.pop() || '';
 
-        for (const line of lines) {
-          if (line.startsWith('data:')) {
-            const data = line.slice(5);
-            if (data.trim() === '[DONE]') {
-              onComplete();
-              return;
-            }
-            if (data) {
-              onChunk(data);
+          for (const line of lines) {
+            if (line.startsWith('data:')) {
+              const data = line.slice(5);
+              if (data.trim() === '[DONE]') {
+                await reader.cancel().catch(() => {});
+                onComplete();
+                return;
+              }
+              if (data) {
+                onChunk(data);
+              }
             }
           }
         }
-      }
 
-      if (buffer.startsWith('data:')) {
-        const data = buffer.slice(5);
-        if (data.trim() !== '[DONE]' && data) {
-          onChunk(data);
+        if (buffer.startsWith('data:')) {
+          const data = buffer.slice(5);
+          if (data.trim() !== '[DONE]' && data) {
+            onChunk(data);
+          }
         }
+      } finally {
+        await reader.cancel().catch(() => {});
       }
       onComplete();
     } catch (err) {

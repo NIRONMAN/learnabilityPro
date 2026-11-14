@@ -17,7 +17,8 @@ import {
   Network,
   Check,
   BookOpen,
-  BrainCircuit
+  BrainCircuit,
+  MessageSquare
 } from 'lucide-react';
 
 export default function DiagramPage() {
@@ -178,9 +179,9 @@ export default function DiagramPage() {
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-4 border-b border-rule-border font-mono text-xs">
         <div className="flex items-center gap-3">
           <Link
-            href={`/learn/${sessionId}`}
+            href="/dashboard"
             className="p-1.5 text-ink-muted hover:text-ink-primary hover:bg-surface-elevated rounded-md transition-colors"
-            title="Return to Study Workspace"
+            title="Exit to Workspace Dashboard"
           >
             <ArrowLeft className="w-4 h-4" />
           </Link>
@@ -195,56 +196,83 @@ export default function DiagramPage() {
           </div>
         </div>
 
-        {selectedDiagram && (
-          <div className="flex items-center gap-2">
-            {/* Zoom Controls */}
-            <div className="flex items-center border border-rule-border rounded-lg bg-surface p-0.5">
+        {/* Unified 3-Mode Switcher */}
+        <div className="flex items-center gap-2">
+          <div className="hidden md:flex items-center bg-surface-elevated p-1 rounded-lg border border-rule-border">
+            <Link
+              href={`/learn/${sessionId}`}
+              className="px-3 py-1 rounded-md text-xs font-medium text-ink-muted hover:text-ink-primary hover:bg-canvas/50 transition-colors flex items-center gap-1.5"
+              title="Switch to Socratic Dialogue"
+            >
+              <MessageSquare className="w-3.5 h-3.5 text-accent-cyan" />
+              <span>Socratic Interrogate</span>
+            </Link>
+            <Link
+              href={`/flashcard/${sessionId}`}
+              className="px-3 py-1 rounded-md text-xs font-medium text-ink-muted hover:text-ink-primary hover:bg-canvas/50 transition-colors flex items-center gap-1.5"
+              title="Switch to Active Recall Flashcards"
+            >
+              <RotateCcw className="w-3.5 h-3.5 text-accent-violet" />
+              <span>Active Recall</span>
+            </Link>
+            <span className="px-3 py-1 rounded-md text-xs font-semibold bg-canvas text-accent-cyan border border-rule-border shadow-sm flex items-center gap-1.5">
+              <Network className="w-3.5 h-3.5 text-accent-cyan" />
+              <span>Concept Map</span>
+            </span>
+          </div>
+
+          {selectedDiagram && (
+            <div className="flex items-center gap-2">
+              {/* Zoom Controls */}
+              <div className="flex items-center border border-rule-border rounded-lg bg-surface p-0.5">
+                <button
+                  onClick={() => setZoomLevel((z) => Math.max(0.6, z - 0.15))}
+                  className="p-1.5 text-ink-muted hover:text-ink-primary hover:bg-surface-elevated rounded"
+                  title="Zoom Out"
+                >
+                  <ZoomOut className="w-3.5 h-3.5" />
+                </button>
+                <button
+                  onClick={() => setZoomLevel(1)}
+                  className="px-2 text-[10px] font-mono text-ink-muted hover:text-ink-primary"
+                  title="Reset Zoom"
+                >
+                  {Math.round(zoomLevel * 100)}%
+                </button>
+                <button
+                  onClick={() => setZoomLevel((z) => Math.min(1.8, z + 0.15))}
+                  className="p-1.5 text-ink-muted hover:text-ink-primary hover:bg-surface-elevated rounded"
+                  title="Zoom In"
+                >
+                  <ZoomIn className="w-3.5 h-3.5" />
+                </button>
+              </div>
+
               <button
-                onClick={() => setZoomLevel((z) => Math.max(0.6, z - 0.15))}
-                className="p-1.5 text-ink-muted hover:text-ink-primary hover:bg-surface-elevated rounded"
-                title="Zoom Out"
+                onClick={() => setShowRawCode(!showRawCode)}
+                className="px-3 py-1.5 bg-surface hover:bg-surface-elevated border border-rule-border text-ink-primary rounded-lg text-xs font-semibold flex items-center gap-1.5 transition-colors cursor-pointer"
+                title={showRawCode ? 'Hide Mermaid Source Code' : 'View Raw Mermaid Source Code'}
               >
-                <ZoomOut className="w-3.5 h-3.5" />
+                <Code className="w-3.5 h-3.5 text-accent-cyan" />
+                <span>{showRawCode ? 'Hide Code' : 'View Code'}</span>
               </button>
               <button
-                onClick={() => setZoomLevel(1)}
-                className="px-2 text-[10px] font-mono text-ink-muted hover:text-ink-primary"
-                title="Reset Zoom"
+                onClick={handleCopyCode}
+                className="px-3 py-1.5 bg-surface hover:bg-surface-elevated border border-rule-border text-ink-primary rounded-lg text-xs font-semibold flex items-center gap-1.5 transition-colors cursor-pointer"
               >
-                {Math.round(zoomLevel * 100)}%
+                {copied ? <Check className="w-3.5 h-3.5 text-accent-emerald" /> : <Copy className="w-3.5 h-3.5" />}
+                <span>{copied ? 'Copied' : 'Copy'}</span>
               </button>
               <button
-                onClick={() => setZoomLevel((z) => Math.min(1.8, z + 0.15))}
-                className="p-1.5 text-ink-muted hover:text-ink-primary hover:bg-surface-elevated rounded"
-                title="Zoom In"
+                onClick={handleExportSvg}
+                className="px-3 py-1.5 bg-accent-cyan text-slate-950 font-bold hover:bg-accent-cyan/90 rounded-lg text-xs flex items-center gap-1.5 transition-colors cursor-pointer shadow-sm shadow-cyan-500/20"
               >
-                <ZoomIn className="w-3.5 h-3.5" />
+                <Download className="w-3.5 h-3.5" />
+                <span>Export SVG</span>
               </button>
             </div>
-
-            <button
-              onClick={() => setShowRawCode(!showRawCode)}
-              className="px-3 py-1.5 bg-surface hover:bg-surface-elevated border border-rule-border text-ink-primary rounded-lg text-xs font-semibold flex items-center gap-1.5 transition-colors cursor-pointer"
-            >
-              <Code className="w-3.5 h-3.5 text-accent-cyan" />
-              <span>{showRawCode ? 'Show Diagram' : 'Mermaid Code'}</span>
-            </button>
-            <button
-              onClick={handleCopyCode}
-              className="px-3 py-1.5 bg-surface hover:bg-surface-elevated border border-rule-border text-ink-primary rounded-lg text-xs font-semibold flex items-center gap-1.5 transition-colors cursor-pointer"
-            >
-              {copied ? <Check className="w-3.5 h-3.5 text-accent-emerald" /> : <Copy className="w-3.5 h-3.5" />}
-              <span>{copied ? 'Copied' : 'Copy'}</span>
-            </button>
-            <button
-              onClick={handleExportSvg}
-              className="px-3 py-1.5 bg-accent-cyan text-slate-950 font-bold hover:bg-accent-cyan/90 rounded-lg text-xs flex items-center gap-1.5 transition-colors cursor-pointer shadow-sm shadow-cyan-500/20"
-            >
-              <Download className="w-3.5 h-3.5" />
-              <span>Export SVG</span>
-            </button>
-          </div>
-        )}
+          )}
+        </div>
       </div>
 
       {/* Synthesis Input Form */}

@@ -21,7 +21,8 @@ import {
   AlertCircle,
   MessageSquare,
   Lightbulb,
-  ArrowRight
+  ArrowRight,
+  Network
 } from 'lucide-react';
 
 export default function FlashcardPlayerPage() {
@@ -198,9 +199,9 @@ export default function FlashcardPlayerPage() {
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-4 border-b border-rule-border font-mono text-xs">
         <div className="flex items-center gap-3">
           <Link
-            href={`/learn/${sessionId}`}
+            href="/dashboard"
             className="p-1.5 text-ink-muted hover:text-ink-primary hover:bg-surface-elevated rounded-md transition-colors"
-            title="Return to Study Workspace"
+            title="Exit to Workspace Dashboard"
           >
             <ArrowLeft className="w-4 h-4" />
           </Link>
@@ -215,15 +216,39 @@ export default function FlashcardPlayerPage() {
           </div>
         </div>
 
+        {/* Unified 3-Mode Switcher */}
         <div className="flex items-center gap-2">
+          <div className="hidden md:flex items-center bg-surface-elevated p-1 rounded-lg border border-rule-border">
+            <Link
+              href={`/learn/${sessionId}`}
+              className="px-3 py-1 rounded-md text-xs font-medium text-ink-muted hover:text-ink-primary hover:bg-canvas/50 transition-colors flex items-center gap-1.5"
+              title="Switch to Socratic Dialogue"
+            >
+              <MessageSquare className="w-3.5 h-3.5 text-accent-cyan" />
+              <span>Socratic Interrogate</span>
+            </Link>
+            <span className="px-3 py-1 rounded-md text-xs font-semibold bg-canvas text-accent-violet border border-rule-border shadow-sm flex items-center gap-1.5">
+              <RotateCcw className="w-3.5 h-3.5 text-accent-violet" />
+              <span>Active Recall</span>
+            </span>
+            <Link
+              href={`/diagram/${sessionId}`}
+              className="px-3 py-1 rounded-md text-xs font-medium text-ink-muted hover:text-ink-primary hover:bg-canvas/50 transition-colors flex items-center gap-1.5"
+              title="Switch to Concept Mindmap"
+            >
+              <Network className="w-3.5 h-3.5 text-accent-amber" />
+              <span>Concept Map</span>
+            </Link>
+          </div>
+
           {cards.length > 0 && (
             <button
               onClick={() => handleGenerate({ force: true })}
               disabled={generating}
-              className="px-3.5 py-1.5 bg-accent-violet text-white font-bold hover:bg-accent-violet/90 disabled:opacity-40 rounded-lg text-xs flex items-center gap-1.5 shadow-sm shadow-violet-500/20 transition-all cursor-pointer"
+              className="px-3.5 py-1.5 bg-accent-violet text-white font-bold hover:bg-accent-violet/90 disabled:opacity-40 rounded-lg text-xs flex items-center gap-1.5 shadow-sm shadow-violet-500/20 transition-all cursor-pointer shrink-0"
             >
               <Plus className="w-3.5 h-3.5" />
-              <span>{generating ? 'Synthesizing...' : 'Generate New Deck'}</span>
+              <span>{generating ? 'Synthesizing...' : 'New Deck'}</span>
             </button>
           )}
         </div>
@@ -235,7 +260,11 @@ export default function FlashcardPlayerPage() {
           type="text"
           value={customPrompt}
           onChange={(e) => setCustomPrompt(e.target.value)}
-          placeholder="e.g. Focus on dinosaur classification, Mesozoic eras, or extinction events..."
+          placeholder={
+            readiness?.topic
+              ? `e.g. Focus on ${readiness.topic} foundational theorems, proofs, or edge cases...`
+              : 'e.g. Focus on foundational proofs, architectural tradeoffs, or key equations...'
+          }
           className="flex-1 px-3.5 py-2 rounded-lg bg-surface border border-rule-border text-ink-primary placeholder:text-ink-subtle text-xs focus:outline-none focus:border-accent-violet"
         />
         <button

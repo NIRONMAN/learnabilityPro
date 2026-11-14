@@ -1,5 +1,6 @@
 import type { Metadata } from 'next';
 import './globals.css';
+import 'katex/dist/katex.min.css';
 import { ThemeProvider } from '@/components/ThemeProvider';
 import { SanctuaryHeader } from '@/components/SanctuaryHeader';
 import { GlobalCommandPalette } from '@/components/GlobalCommandPalette';

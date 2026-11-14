@@ -247,7 +247,11 @@ export default function LearnWorkspacePage() {
 
   const dynamicSuggestions: Array<{ label: string; prompt: string }> =
     session.suggestedQuestions && session.suggestedQuestions.length > 0
-      ? session.suggestedQuestions.map((q) => ({ label: q, prompt: q }))
+      ? session.suggestedQuestions.map((q) => {
+          const trimmed = q.trim();
+          const label = trimmed.length > 38 ? `${trimmed.slice(0, 36).trim()}…` : trimmed;
+          return { label, prompt: q };
+        })
       : [
           {
             label: `Key principles of ${shortTitle}`,
@@ -706,7 +710,7 @@ export default function LearnWorkspacePage() {
                   type="button"
                   disabled={isStreaming}
                   onClick={() => handleSendMessage(item.prompt)}
-                  className="px-2.5 py-1 rounded-full border border-rule-border hover:border-accent-cyan bg-canvas text-ink-muted hover:text-ink-primary whitespace-nowrap transition-colors cursor-pointer disabled:opacity-40"
+                  className="px-2.5 py-1 rounded-full border border-rule-border hover:border-accent-cyan bg-canvas text-ink-muted hover:text-ink-primary whitespace-nowrap transition-colors cursor-pointer disabled:opacity-40 max-w-xs truncate shrink-0"
                   title={item.prompt}
                 >
                   {item.label}

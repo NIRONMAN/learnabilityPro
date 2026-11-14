@@ -3,6 +3,8 @@
 import React from 'react';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
+import remarkMath from 'remark-math';
+import rehypeKatex from 'rehype-katex';
 
 export interface MarkdownRendererProps {
   content: string;
@@ -11,14 +13,21 @@ export interface MarkdownRendererProps {
 
 /**
  * MarkdownRenderer component
- * Safely renders GitHub Flavored Markdown (GFM) using react-markdown and remark-gfm.
+ * Safely renders GitHub Flavored Markdown (GFM) and LaTeX equations using react-markdown, remark-math, and KaTeX.
  * Verified compatible with Next.js 15 and React 19.
  */
 export function MarkdownRenderer({ content, className = '' }: MarkdownRendererProps) {
+  // Normalize double-escaped backslashes in LaTeX expressions streamed from JSON/SSE
+  const formattedContent = React.useMemo(() => {
+    if (!content) return '';
+    return content.replace(/\\\\([a-zA-Z{}()[\]|\\_,!#^])/g, '\\$1');
+  }, [content]);
+
   return (
     <div className={`prose prose-invert max-w-none text-xs leading-relaxed space-y-2 ${className}`}>
       <ReactMarkdown
-        remarkPlugins={[remarkGfm]}
+        remarkPlugins={[remarkGfm, remarkMath]}
+        rehypePlugins={[rehypeKatex]}
         components={{
           // Custom styled code blocks
           code({ className, children, ...props }) {
@@ -90,7 +99,7 @@ export function MarkdownRenderer({ content, className = '' }: MarkdownRendererPr
           },
         }}
       >
-        {content}
+        {formattedContent}
       </ReactMarkdown>
     </div>
   );
