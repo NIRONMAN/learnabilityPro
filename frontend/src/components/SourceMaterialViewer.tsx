@@ -67,7 +67,48 @@ export function SourceMaterialViewer({
     y: number;
   } | null>(null);
 
+  // PDF blob URL state for same-origin iframe/object rendering
+  const [blobPdfUrl, setBlobPdfUrl] = useState<string | null>(null);
+  const [loadingPdf, setLoadingPdf] = useState(false);
+  const [pdfLoadError, setPdfLoadError] = useState<string | null>(null);
+
   const containerRef = useRef<HTMLDivElement>(null);
+
+  // Fetch PDF as Blob URL to avoid cross-origin / X-Frame-Options blocking in Chromium
+  useEffect(() => {
+    let active = true;
+    let objectUrl: string | null = null;
+
+    if (session.contextType === 'PDF' && hasPdfFile && pdfUrl) {
+      setLoadingPdf(true);
+      setPdfLoadError(null);
+
+      fetch(pdfUrl)
+        .then((res) => {
+          if (!res.ok) throw new Error(`HTTP ${res.status}`);
+          return res.blob();
+        })
+        .then((blob) => {
+          if (!active) return;
+          objectUrl = URL.createObjectURL(new Blob([blob], { type: 'application/pdf' }));
+          setBlobPdfUrl(objectUrl);
+          setLoadingPdf(false);
+        })
+        .catch((err) => {
+          if (!active) return;
+          console.error('Failed to load PDF blob:', err);
+          setPdfLoadError('Could not load PDF document directly.');
+          setLoadingPdf(false);
+        });
+    }
+
+    return () => {
+      active = false;
+      if (objectUrl) {
+        URL.revokeObjectURL(objectUrl);
+      }
+    };
+  }, [session.contextType, hasPdfFile, pdfUrl]);
 
   // If hasPdfFile updates, sync view mode
   useEffect(() => {
@@ -481,15 +522,39 @@ export function SourceMaterialViewer({
           <div className="h-full flex flex-col space-y-3">
             {/* Embed View */}
             {pdfSubView === 'embed' && hasPdfFile ? (
-              <div className="flex-1 w-full min-h-[500px] h-full rounded-xl overflow-hidden border border-rule-border shadow-md bg-canvas relative">
-                <iframe
-                  src={pdfUrl}
-                  className="w-full h-full min-h-[540px] border-0"
-                  title="PDF Document"
-                />
+              <div className="flex-1 w-full min-h-[500px] h-full rounded-xl overflow-hidden border border-rule-border shadow-md bg-canvas relative flex flex-col">
+                {loadingPdf ? (
+                  <div className="flex-1 min-h-[540px] flex flex-col items-center justify-center text-xs font-mono text-ink-muted space-y-3 bg-surface">
+                    <span className="w-2.5 h-2.5 rounded-full bg-accent-cyan animate-pulse"></span>
+                    <span>Rendering PDF document in Chrome viewer...</span>
+                  </div>
+                ) : blobPdfUrl ? (
+                  <object
+                    data={blobPdfUrl}
+                    type="application/pdf"
+                    className="w-full h-full min-h-[540px] flex-1 border-0"
+                  >
+                    <iframe
+                      src={blobPdfUrl}
+                      className="w-full h-full min-h-[540px] border-0"
+                      title="PDF Document"
+                    />
+                  </object>
+                ) : (
+                  <div className="flex-1 min-h-[540px] flex flex-col items-center justify-center text-xs font-mono text-ink-muted space-y-3 p-6 bg-surface">
+                    <p>{pdfLoadError || 'Could not load PDF document directly.'}</p>
+                    <button
+                      type="button"
+                      onClick={() => setPdfSubView('reader')}
+                      className="px-3.5 py-1.5 rounded-lg bg-surface-elevated border border-rule-border text-accent-cyan hover:border-accent-cyan transition-colors cursor-pointer"
+                    >
+                      Switch to Academic Reader View
+                    </button>
+                  </div>
+                )}
                 <div className="absolute top-2 right-2 flex items-center gap-1 z-10 bg-surface/90 backdrop-blur-sm p-1 rounded-lg border border-rule-border shadow-sm">
                   <a
-                    href={pdfUrl}
+                    href={blobPdfUrl || pdfUrl}
                     target="_blank"
                     rel="noopener noreferrer"
                     className="p-1 rounded text-ink-muted hover:text-ink-primary transition-colors"
@@ -498,8 +563,8 @@ export function SourceMaterialViewer({
                     <ExternalLink className="w-3.5 h-3.5" />
                   </a>
                   <a
-                    href={pdfUrl}
-                    download
+                    href={blobPdfUrl || pdfUrl}
+                    download={session.sourceUrl || "document.pdf"}
                     className="p-1 rounded text-ink-muted hover:text-ink-primary transition-colors"
                     title="Download PDF"
                   >
