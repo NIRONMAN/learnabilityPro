@@ -1,13 +1,13 @@
 'use client';
 
 import React, { useState, useEffect, useRef, useMemo } from 'react';
+import dynamic from 'next/dynamic';
 import {
   FileText,
   Youtube,
   BookOpen,
   Copy,
   Check,
-  Search,
   ExternalLink,
   Quote,
   Sparkles,
@@ -15,14 +15,22 @@ import {
   RotateCcw,
   FileCode,
   Download,
-  Eye,
-  Maximize2,
   X,
-  Clock,
-  Layers
+  Clock
 } from 'lucide-react';
 import { StudySession } from '@/lib/api';
 import { MarkdownRenderer } from '@/components/MarkdownRenderer';
+
+// Dynamically import MinimalPdfViewer on client side to avoid SSR canvas/DOM issues
+const MinimalPdfViewer = dynamic(() => import('@/components/MinimalPdfViewer'), {
+  ssr: false,
+  loading: () => (
+    <div className="flex-1 h-full flex flex-col items-center justify-center text-xs font-mono text-ink-muted space-y-3 bg-canvas">
+      <span className="w-2.5 h-2.5 rounded-full bg-accent-cyan animate-pulse"></span>
+      <span>Rendering Minimal PDF Studio...</span>
+    </div>
+  ),
+});
 
 export interface SourceMaterialViewerProps {
   session: StudySession;
@@ -56,61 +64,19 @@ export function SourceMaterialViewer({
   // Tab/view mode within material panel
   const [pdfSubView, setPdfSubView] = useState<'embed' | 'reader'>(hasPdfFile ? 'embed' : 'reader');
   const [youtubeSubView, setYoutubeSubView] = useState<'transcript' | 'summary'>('transcript');
-  const [searchQuery, setSearchQuery] = useState('');
   const [copiedContext, setCopiedContext] = useState(false);
   const [copiedSegmentIdx, setCopiedSegmentIdx] = useState<number | null>(null);
 
-  // Floating selection action state
+  // Floating selection action state for reader/transcript text
   const [selectionAction, setSelectionAction] = useState<{
     text: string;
     x: number;
     y: number;
   } | null>(null);
 
-  // PDF blob URL state for same-origin iframe/object rendering
-  const [blobPdfUrl, setBlobPdfUrl] = useState<string | null>(null);
-  const [loadingPdf, setLoadingPdf] = useState(false);
-  const [pdfLoadError, setPdfLoadError] = useState<string | null>(null);
-
   const containerRef = useRef<HTMLDivElement>(null);
 
-  // Fetch PDF as Blob URL to avoid cross-origin / X-Frame-Options blocking in Chromium
-  useEffect(() => {
-    let active = true;
-    let objectUrl: string | null = null;
-
-    if (session.contextType === 'PDF' && hasPdfFile && pdfUrl) {
-      setLoadingPdf(true);
-      setPdfLoadError(null);
-
-      fetch(pdfUrl)
-        .then((res) => {
-          if (!res.ok) throw new Error(`HTTP ${res.status}`);
-          return res.blob();
-        })
-        .then((blob) => {
-          if (!active) return;
-          objectUrl = URL.createObjectURL(new Blob([blob], { type: 'application/pdf' }));
-          setBlobPdfUrl(objectUrl);
-          setLoadingPdf(false);
-        })
-        .catch((err) => {
-          if (!active) return;
-          console.error('Failed to load PDF blob:', err);
-          setPdfLoadError('Could not load PDF document directly.');
-          setLoadingPdf(false);
-        });
-    }
-
-    return () => {
-      active = false;
-      if (objectUrl) {
-        URL.revokeObjectURL(objectUrl);
-      }
-    };
-  }, [session.contextType, hasPdfFile, pdfUrl]);
-
-  // If hasPdfFile updates, sync view mode
+  // Sync subview if hasPdfFile changes
   useEffect(() => {
     if (hasPdfFile && pdfSubView === 'reader' && !session.contextText) {
       setPdfSubView('embed');
@@ -119,7 +85,7 @@ export function SourceMaterialViewer({
     }
   }, [hasPdfFile, session.contextText, pdfSubView]);
 
-  // Handle text selection inside source material
+  // Handle text selection in Reader or Transcript
   const handleMouseUp = () => {
     const sel = window.getSelection();
     if (!sel || sel.isCollapsed) {
@@ -127,18 +93,17 @@ export function SourceMaterialViewer({
       return;
     }
     const text = sel.toString().trim();
-    if (text.length > 5) {
+    if (text.length > 4) {
       try {
         const range = sel.getRangeAt(0);
         const rect = range.getBoundingClientRect();
-        const containerRect = containerRef.current?.getBoundingClientRect();
 
-        if (containerRect) {
-          // Position relative to container or viewport
-          const x = Math.max(10, Math.min(rect.left + rect.width / 2 - 100, window.innerWidth - 220));
-          const y = Math.max(10, rect.top - 46);
-          setSelectionAction({ text, x, y });
-        }
+        const x = Math.max(10, Math.min(rect.left + rect.width / 2 - 100, window.innerWidth - 220));
+        const y = Math.max(10, rect.top - 46);
+        setSelectionAction({ text, x, y });
+
+        // Instantly populate chat input so user can ask immediately!
+        onCiteText(text, session.title || 'Selected Literature');
       } catch {
         setSelectionAction(null);
       }
@@ -182,7 +147,6 @@ export function SourceMaterialViewer({
       const line = rawLine.trim();
       if (!line) continue;
 
-      // Skip generic headers
       if (line.startsWith('YouTube Video:') || line.startsWith('### Lecture Summary') || line.startsWith('### Lecture Transcript')) {
         continue;
       }
@@ -204,7 +168,6 @@ export function SourceMaterialViewer({
       } else if (currentSegment) {
         currentSegment.text += ' ' + line;
       } else {
-        // Line without timestamp before any timestamped line
         segments.push({
           text: line,
         });
@@ -218,12 +181,19 @@ export function SourceMaterialViewer({
     return segments;
   }, [session.contextText]);
 
-  // Filter transcript segments by search query
-  const filteredTranscript = useMemo(() => {
-    if (!searchQuery.trim()) return parsedTranscript;
-    const q = searchQuery.toLowerCase();
-    return parsedTranscript.filter((s) => s.text.toLowerCase().includes(q) || s.timestamp?.includes(q));
-  }, [parsedTranscript, searchQuery]);
+  // If in PDF Embed mode with valid PDF file, render the dedicated MinimalPdfViewer edge-to-edge!
+  if (session.contextType === 'PDF' && pdfSubView === 'embed' && hasPdfFile) {
+    return (
+      <div className={`h-full w-full flex flex-col overflow-hidden relative ${className}`}>
+        <MinimalPdfViewer
+          pdfUrl={pdfUrl}
+          onCiteText={onCiteText}
+          onAskTutor={onAskTutor}
+          title={session.sourceUrl || session.title}
+        />
+      </div>
+    );
+  }
 
   return (
     <div
@@ -232,34 +202,28 @@ export function SourceMaterialViewer({
       className={`h-full flex flex-col bg-surface/50 border-r border-rule-border overflow-hidden select-text relative font-sans ${className}`}
     >
       {/* ========================================================= */}
-      {/* SOURCE MATERIAL HEADER                                    */}
+      {/* MINIMAL HEADER                                            */}
       {/* ========================================================= */}
-      <div className="h-12 px-4 border-b border-rule-border bg-surface flex items-center justify-between shrink-0 font-mono text-xs z-10">
+      <div className="h-10 px-3 border-b border-rule-border bg-surface flex items-center justify-between shrink-0 font-mono text-xs z-10">
         <div className="flex items-center gap-2 min-w-0">
           {session.contextType === 'YOUTUBE' ? (
-            <Youtube className="w-4 h-4 text-red-500 shrink-0" />
+            <Youtube className="w-3.5 h-3.5 text-red-500 shrink-0" />
           ) : session.contextType === 'PDF' ? (
-            <FileText className="w-4 h-4 text-accent-cyan shrink-0" />
+            <FileText className="w-3.5 h-3.5 text-accent-cyan shrink-0" />
           ) : (
-            <BookOpen className="w-4 h-4 text-accent-cyan shrink-0" />
+            <BookOpen className="w-3.5 h-3.5 text-accent-cyan shrink-0" />
           )}
 
-          <span className="font-bold text-xs text-ink-primary truncate max-w-[160px] sm:max-w-xs" title={session.sourceUrl || session.title}>
+          <span className="font-semibold text-xs text-ink-primary truncate max-w-[160px] sm:max-w-xs" title={session.sourceUrl || session.title}>
             {session.sourceUrl || session.title || 'Source Material'}
           </span>
-
-          {session.contextType === 'PDF' && hasPdfFile && (
-            <span className="hidden sm:inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-semibold bg-accent-emerald/10 text-accent-emerald border border-accent-emerald/20">
-              PDF Live
-            </span>
-          )}
         </div>
 
-        {/* Action Controls & Sub-view Switchers */}
+        {/* Sub-view toggles and actions */}
         <div className="flex items-center gap-1.5 shrink-0">
-          {/* PDF View Toggle: Embed vs Reader */}
+          {/* PDF toggle between Document (PDF.js) and Reader */}
           {session.contextType === 'PDF' && (
-            <div className="flex items-center bg-surface-elevated p-0.5 rounded-lg border border-rule-border">
+            <div className="flex items-center bg-surface-elevated p-0.5 rounded border border-rule-border">
               {hasPdfFile && (
                 <button
                   type="button"
@@ -269,9 +233,9 @@ export function SourceMaterialViewer({
                       ? 'bg-canvas text-accent-cyan border border-rule-border shadow-xs'
                       : 'text-ink-muted hover:text-ink-primary'
                   }`}
-                  title="View original PDF document"
+                  title="Switch to in-DOM PDF Document Viewer"
                 >
-                  Document
+                  PDF
                 </button>
               )}
               <button
@@ -282,16 +246,16 @@ export function SourceMaterialViewer({
                     ? 'bg-canvas text-accent-cyan border border-rule-border shadow-xs'
                     : 'text-ink-muted hover:text-ink-primary'
                 }`}
-                title="View formatted text with LaTeX formulas and quick citations"
+                title="Academic Reader"
               >
                 Reader
               </button>
             </div>
           )}
 
-          {/* YouTube View Toggle: Transcript vs Summary */}
+          {/* YouTube Transcript vs Summary toggle */}
           {session.contextType === 'YOUTUBE' && parsedTranscript.length > 0 && (
-            <div className="flex items-center bg-surface-elevated p-0.5 rounded-lg border border-rule-border">
+            <div className="flex items-center bg-surface-elevated p-0.5 rounded border border-rule-border">
               <button
                 type="button"
                 onClick={() => setYoutubeSubView('transcript')}
@@ -300,7 +264,7 @@ export function SourceMaterialViewer({
                     ? 'bg-canvas text-accent-cyan border border-rule-border shadow-xs'
                     : 'text-ink-muted hover:text-ink-primary'
                 }`}
-                title="View interactive timestamped lecture transcript"
+                title="Interactive Transcript"
               >
                 Transcript
               </button>
@@ -312,85 +276,45 @@ export function SourceMaterialViewer({
                     ? 'bg-canvas text-accent-cyan border border-rule-border shadow-xs'
                     : 'text-ink-muted hover:text-ink-primary'
                 }`}
-                title="View lecture summary & core concepts"
+                title="Lecture Summary"
               >
                 Summary
               </button>
             </div>
           )}
 
-          {/* External Link if applicable */}
           {session.sourceUrl && session.sourceUrl.startsWith('http') && (
             <a
               href={session.sourceUrl}
               target="_blank"
               rel="noopener noreferrer"
-              className="p-1.5 rounded-md hover:bg-surface-elevated text-ink-muted hover:text-ink-primary transition-colors cursor-pointer"
+              className="p-1 rounded hover:bg-surface-elevated text-ink-muted hover:text-ink-primary transition-colors cursor-pointer"
               title="Open source in new tab"
             >
               <ExternalLink className="w-3.5 h-3.5" />
             </a>
           )}
 
-          {/* Close Panel Button if requested */}
           {onClose && (
             <button
               type="button"
               onClick={onClose}
-              className="p-1.5 rounded-md hover:bg-surface-elevated text-ink-muted hover:text-ink-primary transition-colors cursor-pointer"
+              className="p-1 rounded hover:bg-surface-elevated text-ink-muted hover:text-ink-primary transition-colors cursor-pointer"
               title="Hide source material panel"
             >
-              <X className="w-4 h-4" />
+              <X className="w-3.5 h-3.5" />
             </button>
           )}
         </div>
       </div>
 
       {/* ========================================================= */}
-      {/* QUICK SEARCH & CITATION TOOLBAR                           */}
+      {/* BODY CONTENT: YOUTUBE MEDIA OR ACADEMIC READER            */}
       {/* ========================================================= */}
-      <div className="px-4 py-2 border-b border-rule-border/70 bg-surface/80 flex items-center justify-between gap-3 text-xs font-mono shrink-0">
-        <div className="relative flex-1 max-w-sm">
-          <Search className="w-3.5 h-3.5 text-ink-muted absolute left-2.5 top-1/2 -translate-y-1/2" />
-          <input
-            type="text"
-            value={searchQuery}
-            onChange={(e) => setSearchQuery(e.target.value)}
-            placeholder="Search material / citations..."
-            className="w-full bg-canvas border border-rule-border rounded-md pl-8 pr-3 py-1 text-xs text-ink-primary placeholder:text-ink-muted focus:outline-none focus:border-accent-cyan"
-          />
-          {searchQuery && (
-            <button
-              onClick={() => setSearchQuery('')}
-              className="absolute right-2 top-1/2 -translate-y-1/2 text-ink-muted hover:text-ink-primary"
-            >
-              <X className="w-3 h-3" />
-            </button>
-          )}
-        </div>
-
-        <div className="flex items-center gap-2">
-          {session.contextText && (
-            <button
-              type="button"
-              onClick={handleCopyContext}
-              className="p-1.5 rounded-md hover:bg-surface-elevated border border-rule-border text-ink-muted hover:text-ink-primary transition-colors flex items-center gap-1 text-[11px] cursor-pointer"
-              title="Copy entire text to clipboard"
-            >
-              {copiedContext ? <Check className="w-3 h-3 text-accent-emerald" /> : <Copy className="w-3 h-3" />}
-              <span className="hidden sm:inline">{copiedContext ? 'Copied' : 'Copy Text'}</span>
-            </button>
-          )}
-        </div>
-      </div>
-
-      {/* ========================================================= */}
-      {/* BODY CONTENT: YOUTUBE OR PDF OR ACADEMIC READER           */}
-      {/* ========================================================= */}
-      <div className="flex-1 overflow-y-auto p-4 space-y-4 min-h-0">
+      <div className="flex-1 overflow-y-auto p-3 sm:p-4 space-y-4 min-h-0 bg-canvas">
         {/* YOUTUBE MEDIA VIEW */}
         {session.contextType === 'YOUTUBE' && (
-          <div className="space-y-4">
+          <div className="space-y-3">
             {youtubeEmbedUrl ? (
               <div className="aspect-video w-full rounded-xl overflow-hidden border border-rule-border shadow-md bg-black shrink-0">
                 <iframe
@@ -407,20 +331,20 @@ export function SourceMaterialViewer({
               </div>
             )}
 
-            {/* Sub-view: Transcript or Summary */}
+            {/* Transcript or Summary */}
             {youtubeSubView === 'transcript' && (
               <div className="space-y-2">
                 <div className="flex items-center justify-between text-xs font-mono text-ink-muted px-1">
                   <span className="font-semibold text-ink-primary flex items-center gap-1.5">
                     <Clock className="w-3.5 h-3.5 text-accent-cyan" />
-                    Lecture Transcript ({filteredTranscript.length} segments)
+                    Lecture Transcript ({parsedTranscript.length} segments)
                   </span>
-                  <span className="text-[10px]">Click timestamp to seek video · Select text to cite</span>
+                  <span className="text-[10px]">Select text to cite into chat</span>
                 </div>
 
-                {filteredTranscript.length > 0 ? (
+                {parsedTranscript.length > 0 ? (
                   <div className="space-y-2 max-h-[calc(100vh-22rem)] overflow-y-auto pr-1">
-                    {filteredTranscript.map((segment, idx) => (
+                    {parsedTranscript.map((segment, idx) => (
                       <div
                         key={idx}
                         className="group p-2.5 rounded-lg border border-rule-border bg-surface hover:bg-surface-elevated hover:border-accent-cyan/40 transition-all text-xs leading-relaxed space-y-1.5"
@@ -491,7 +415,7 @@ export function SourceMaterialViewer({
                   </div>
                 ) : (
                   <div className="p-4 rounded-lg bg-surface border border-rule-border text-center text-xs text-ink-muted font-mono">
-                    {searchQuery ? `No segments match "${searchQuery}"` : 'Transcript is parsing or not available.'}
+                    Transcript is parsing or not available.
                   </div>
                 )}
               </div>
@@ -517,94 +441,37 @@ export function SourceMaterialViewer({
           </div>
         )}
 
-        {/* PDF VIEW */}
+        {/* READER VIEW (for PDF text or starter sessions) */}
         {session.contextType === 'PDF' && (
-          <div className="h-full flex flex-col space-y-3">
-            {/* Embed View */}
-            {pdfSubView === 'embed' && hasPdfFile ? (
-              <div className="flex-1 w-full min-h-[500px] h-full rounded-xl overflow-hidden border border-rule-border shadow-md bg-canvas relative flex flex-col">
-                {loadingPdf ? (
-                  <div className="flex-1 min-h-[540px] flex flex-col items-center justify-center text-xs font-mono text-ink-muted space-y-3 bg-surface">
-                    <span className="w-2.5 h-2.5 rounded-full bg-accent-cyan animate-pulse"></span>
-                    <span>Rendering PDF document in Chrome viewer...</span>
-                  </div>
-                ) : blobPdfUrl ? (
-                  <object
-                    data={blobPdfUrl}
-                    type="application/pdf"
-                    className="w-full h-full min-h-[540px] flex-1 border-0"
-                  >
-                    <iframe
-                      src={blobPdfUrl}
-                      className="w-full h-full min-h-[540px] border-0"
-                      title="PDF Document"
-                    />
-                  </object>
-                ) : (
-                  <div className="flex-1 min-h-[540px] flex flex-col items-center justify-center text-xs font-mono text-ink-muted space-y-3 p-6 bg-surface">
-                    <p>{pdfLoadError || 'Could not load PDF document directly.'}</p>
-                    <button
-                      type="button"
-                      onClick={() => setPdfSubView('reader')}
-                      className="px-3.5 py-1.5 rounded-lg bg-surface-elevated border border-rule-border text-accent-cyan hover:border-accent-cyan transition-colors cursor-pointer"
-                    >
-                      Switch to Academic Reader View
-                    </button>
-                  </div>
-                )}
-                <div className="absolute top-2 right-2 flex items-center gap-1 z-10 bg-surface/90 backdrop-blur-sm p-1 rounded-lg border border-rule-border shadow-sm">
-                  <a
-                    href={blobPdfUrl || pdfUrl}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="p-1 rounded text-ink-muted hover:text-ink-primary transition-colors"
-                    title="Open in new window"
-                  >
-                    <ExternalLink className="w-3.5 h-3.5" />
-                  </a>
-                  <a
-                    href={blobPdfUrl || pdfUrl}
-                    download={session.sourceUrl || "document.pdf"}
-                    className="p-1 rounded text-ink-muted hover:text-ink-primary transition-colors"
-                    title="Download PDF"
-                  >
-                    <Download className="w-3.5 h-3.5" />
-                  </a>
-                </div>
+          <div className="space-y-4">
+            <div className="p-4 rounded-xl bg-surface border border-rule-border space-y-3 shadow-xs">
+              <div className="flex items-center justify-between">
+                <span className="font-mono text-xs font-bold text-accent-cyan uppercase tracking-wider flex items-center gap-1.5">
+                  <FileText className="w-3.5 h-3.5" />
+                  Academic Literature Reader
+                </span>
+                <button
+                  type="button"
+                  onClick={() => onCiteText(session.contextText || '', session.title)}
+                  className="px-2.5 py-1 rounded-md text-[11px] font-mono font-semibold bg-accent-cyan/10 text-accent-cyan hover:bg-accent-cyan/20 border border-accent-cyan/20 transition-colors flex items-center gap-1 cursor-pointer"
+                  title="Cite entire document in chat"
+                >
+                  <Quote className="w-3 h-3" />
+                  <span>Cite All</span>
+                </button>
               </div>
-            ) : (
-              /* Reader View */
-              <div className="space-y-4">
-                <div className="p-4 rounded-xl bg-surface border border-rule-border space-y-3 shadow-xs">
-                  <div className="flex items-center justify-between">
-                    <span className="font-mono text-xs font-bold text-accent-cyan uppercase tracking-wider flex items-center gap-1.5">
-                      <FileText className="w-3.5 h-3.5" />
-                      Academic Literature Reader
-                    </span>
-                    <button
-                      type="button"
-                      onClick={() => onCiteText(session.contextText || '', session.title)}
-                      className="px-2.5 py-1 rounded-md text-[11px] font-mono font-semibold bg-accent-cyan/10 text-accent-cyan hover:bg-accent-cyan/20 border border-accent-cyan/20 transition-colors flex items-center gap-1 cursor-pointer"
-                      title="Cite entire document in chat"
-                    >
-                      <Quote className="w-3 h-3" />
-                      <span>Cite All</span>
-                    </button>
-                  </div>
 
-                  {session.contextText ? (
-                    <div className="p-4 rounded-lg bg-canvas border border-rule-border text-xs leading-relaxed font-sans text-ink-body selection:bg-accent-cyan/30">
-                      <MarkdownRenderer content={session.contextText} onTimestampClick={onSeekVideo} />
-                    </div>
-                  ) : (
-                    <div className="p-6 text-center text-xs text-ink-muted font-mono space-y-2">
-                      <FileCode className="w-6 h-6 mx-auto text-accent-cyan" />
-                      <p>Document text is being indexed or not yet available.</p>
-                    </div>
-                  )}
+              {session.contextText ? (
+                <div className="p-4 rounded-lg bg-canvas border border-rule-border text-xs leading-relaxed font-sans text-ink-body selection:bg-accent-cyan/30">
+                  <MarkdownRenderer content={session.contextText} onTimestampClick={onSeekVideo} />
                 </div>
-              </div>
-            )}
+              ) : (
+                <div className="p-6 text-center text-xs text-ink-muted font-mono space-y-2">
+                  <FileCode className="w-6 h-6 mx-auto text-accent-cyan" />
+                  <p>Document text is being indexed or not yet available.</p>
+                </div>
+              )}
+            </div>
           </div>
         )}
 

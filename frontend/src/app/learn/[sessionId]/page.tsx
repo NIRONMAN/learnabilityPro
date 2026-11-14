@@ -152,14 +152,20 @@ export default function LearnWorkspacePage() {
     setTimeout(() => setCopiedMessageId(null), 2000);
   };
 
-  // Citation handler: when a user clicks "Cite in Chat" from the source viewer
+  // Citation handler: when a user selects text or clicks "Cite in Chat" from the source viewer
   const handleCiteText = (quoteText: string, reference?: string) => {
     const trimmed = quoteText.trim();
     if (!trimmed) return;
     const refHeader = reference ? `[Source Reference: ${reference}]\n` : '';
-    const formatted = `${refHeader}> "${trimmed}"\n\nCan you explain this part in more detail?`;
+    const formatted = `${refHeader}> "${trimmed}"\n\n`;
 
-    setInputText((prev) => (prev.trim() ? `${prev.trim()}\n\n${formatted}` : formatted));
+    setInputText((prev) => {
+      if (prev.includes(trimmed)) return prev;
+      if (!prev.trim()) {
+        return formatted;
+      }
+      return `${prev.trim()}\n\n${formatted}`;
+    });
 
     // If currently in full material view, switch to split view so the user can see their chat input
     if (layoutMode === 'material') {
@@ -169,9 +175,11 @@ export default function LearnWorkspacePage() {
     setTimeout(() => {
       if (textareaRef.current) {
         textareaRef.current.focus();
+        const len = textareaRef.current.value.length;
         textareaRef.current.scrollTop = textareaRef.current.scrollHeight;
+        textareaRef.current.setSelectionRange(len, len);
       }
-    }, 100);
+    }, 80);
   };
 
   // "Ask Tutor" immediate inquiry from selection

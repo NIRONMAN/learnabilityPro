@@ -52,7 +52,8 @@ public class IngestionController {
     public ResponseEntity<org.springframework.core.io.Resource> getPdf(
             @PathVariable UUID sessionId,
             @AuthenticationPrincipal UserPrincipal principal) {
-        org.springframework.core.io.Resource pdf = pdfIngestionService.getPdfResource(sessionId, principal.getId());
+        UUID userId = principal != null ? principal.getId() : null;
+        org.springframework.core.io.Resource pdf = pdfIngestionService.getPdfResource(sessionId, userId);
         if (pdf == null || !pdf.exists()) {
             return ResponseEntity.notFound().build();
         }

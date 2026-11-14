@@ -137,7 +137,9 @@ public class PdfIngestionService {
     }
 
     public Resource getPdfResource(UUID sessionId, UUID userId) {
-        sessionService.getSessionEntity(sessionId, userId);
+        if (userId != null) {
+            sessionService.getSessionEntity(sessionId, userId);
+        }
         java.nio.file.Path filePath = java.nio.file.Paths.get("uploads", "pdfs", sessionId.toString() + ".pdf");
         if (!java.nio.file.Files.exists(filePath)) {
             return null;
