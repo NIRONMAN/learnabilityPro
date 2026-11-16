@@ -17,6 +17,8 @@ import org.springframework.security.web.SecurityFilterChain;
 import org.springframework.security.web.authentication.UsernamePasswordAuthenticationFilter;
 import org.springframework.web.cors.CorsConfiguration;
 import org.springframework.web.cors.CorsConfigurationSource;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.web.cors.UrlBasedCorsConfigurationSource;
 
 import java.util.List;
@@ -28,10 +30,25 @@ public class SecurityConfig {
 
     private final JwtAuthenticationFilter jwtAuthenticationFilter;
     private final CustomUserDetailsService userDetailsService;
+    private final List<String> allowedOrigins;
 
-    public SecurityConfig(JwtAuthenticationFilter jwtAuthenticationFilter, CustomUserDetailsService userDetailsService) {
+    @Autowired
+    public SecurityConfig(
+            JwtAuthenticationFilter jwtAuthenticationFilter,
+            CustomUserDetailsService userDetailsService,
+            @Value("${application.cors.allowed-origins:${CORS_ALLOWED_ORIGINS:${ALLOWED_ORIGINS:http://localhost:3000,http://localhost:3001}}}") List<String> allowedOrigins) {
         this.jwtAuthenticationFilter = jwtAuthenticationFilter;
         this.userDetailsService = userDetailsService;
+        List<String> cleaned = (allowedOrigins == null) ? List.of() : allowedOrigins.stream()
+                .flatMap(origin -> java.util.Arrays.stream(origin.split(",")))
+                .map(String::trim)
+                .filter(origin -> !origin.isEmpty())
+                .toList();
+        this.allowedOrigins = cleaned.isEmpty() ? List.of("http://localhost:3000", "http://localhost:3001") : cleaned;
+    }
+
+    public SecurityConfig(JwtAuthenticationFilter jwtAuthenticationFilter, CustomUserDetailsService userDetailsService) {
+        this(jwtAuthenticationFilter, userDetailsService, List.of("http://localhost:3000", "http://localhost:3001"));
     }
 
     @Bean
@@ -78,7 +95,12 @@ public class SecurityConfig {
     @Bean
     public CorsConfigurationSource corsConfigurationSource() {
         CorsConfiguration configuration = new CorsConfiguration();
-        configuration.setAllowedOrigins(List.of("http://localhost:3000", "http://localhost:3001"));
+        boolean hasPattern = allowedOrigins.stream().anyMatch(o -> o.contains("*"));
+        if (hasPattern) {
+            configuration.setAllowedOriginPatterns(allowedOrigins);
+        } else {
+            configuration.setAllowedOrigins(allowedOrigins);
+        }
         configuration.setAllowedMethods(List.of("GET", "POST", "PUT", "DELETE", "OPTIONS", "PATCH"));
         configuration.setAllowedHeaders(List.of("Authorization", "Content-Type", "Accept", "Origin", "X-Requested-With"));
         configuration.setAllowCredentials(true);
@@ -87,5 +109,9 @@ public class SecurityConfig {
         UrlBasedCorsConfigurationSource source = new UrlBasedCorsConfigurationSource();
         source.registerCorsConfiguration("/**", configuration);
         return source;
+    }
+
+    public List<String> getAllowedOrigins() {
+        return allowedOrigins;
     }
 }
