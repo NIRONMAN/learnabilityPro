@@ -180,7 +180,13 @@ public class ChatService {
 
         return streamFlux
                 .doOnNext(fullResponse::append)
-                .doOnComplete(() -> {
+                .onErrorResume(ex -> {
+                    log.error("AI stream error during generation for session {}: {}", sessionId, ex.getMessage());
+                    String msg = "\n\n*(Note: Gemini experienced a temporary service disruption or capacity limit. Partial response saved.)*";
+                    fullResponse.append(msg);
+                    return Flux.just(msg);
+                })
+                .doFinally(signalType -> {
                     String finalContent = fullResponse.toString();
                     if (!finalContent.isBlank()) {
                         ChatMessage assistantMsg = ChatMessage.builder()
