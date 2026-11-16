@@ -253,8 +253,18 @@ export default function LearnWorkspacePage() {
         },
         (err) => {
           setIsStreaming(false);
+          if (accumulatedTokens.trim()) {
+            const assistantMessage: ChatMessage = {
+              id: 'assistant-' + Date.now(),
+              sessionId,
+              sender: 'ASSISTANT',
+              content: accumulatedTokens + '\n\n*(Note: Stream interrupted due to connection drop or AI capacity limit. Partial response preserved.)*',
+              createdAt: new Date().toISOString(),
+            };
+            setMessages((prev) => [...prev, assistantMessage]);
+          }
           setStreamingResponse('');
-          setStreamError(err.message || 'Stream connection interrupted. Please try again.');
+          setStreamError(err.message || 'Stream connection interrupted. Partial response preserved.');
         },
         session?.contextType === 'YOUTUBE' && videoPlayback.currentTime > 0
           ? {
@@ -265,6 +275,16 @@ export default function LearnWorkspacePage() {
       );
     } catch (err: any) {
       setIsStreaming(false);
+      if (accumulatedTokens.trim()) {
+        const assistantMessage: ChatMessage = {
+          id: 'assistant-' + Date.now(),
+          sessionId,
+          sender: 'ASSISTANT',
+          content: accumulatedTokens + '\n\n*(Note: Stream interrupted due to connection drop or AI capacity limit. Partial response preserved.)*',
+          createdAt: new Date().toISOString(),
+        };
+        setMessages((prev) => [...prev, assistantMessage]);
+      }
       setStreamingResponse('');
       setStreamError(err.message || 'Failed to connect to AI tutor streaming endpoint.');
     }
