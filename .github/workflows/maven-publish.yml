@@ -35,12 +35,13 @@ jobs:
           server-id: github
           settings-path: ${{ github.workspace }}
           cache: maven
+          cache-dependency-path: backend/pom.xml
 
       # 3. Build, test and publish Maven package
       - name: Build and publish Maven package
         run: |
           mvn -B clean deploy \
-            --file pom.xml \
+            --file backend/pom.xml \
             -s "$GITHUB_WORKSPACE/settings.xml"
         env:
           GITHUB_TOKEN: ${{ github.token }}
@@ -64,7 +65,7 @@ jobs:
       # 5. Prepare executable JAR
       - name: Prepare deployment artifact
         run: |
-          JAR=$(find target -maxdepth 1 \
+          JAR=$(find backend/target -maxdepth 1 \
             -name '*.jar' \
             ! -name '*-sources.jar' \
             ! -name '*-javadoc.jar' \
