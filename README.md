@@ -434,7 +434,7 @@ Database migrations are managed via **Flyway** under `backend/src/main/resources
 ## 👤 Author & Credits
 
 **Niranjan Dabhade**
-- 🌐 Website: [niranjandabhade.dev](https://niranjandabhade.dev)
+- 🌐 Website: [nironman.com](https://nironman.com)
 - 🐙 GitHub: [@NIRONMAN](https://github.com/NIRONMAN)
 - 💼 Project Live Demo: [https://learnability.nironman.com](https://learnability.nironman.com)
 
