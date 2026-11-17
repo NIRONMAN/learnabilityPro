@@ -4,6 +4,7 @@ import 'katex/dist/katex.min.css';
 import { ThemeProvider } from '@/components/ThemeProvider';
 import { SanctuaryHeader } from '@/components/SanctuaryHeader';
 import { GlobalCommandPalette } from '@/components/GlobalCommandPalette';
+import { QueryProvider } from '@/providers/QueryProvider';
 
 export const metadata: Metadata = {
   title: 'Learnability Pro · Academic Research Studio',
@@ -19,11 +20,13 @@ export default function RootLayout({
   return (
     <html lang="en" suppressHydrationWarning className="dark">
       <body className="min-h-screen bg-canvas text-ink-body font-sans antialiased flex flex-col selection:bg-wash-highlight selection:text-ink-primary">
-        <ThemeProvider>
-          <SanctuaryHeader />
-          <GlobalCommandPalette />
-          <main className="flex-1 flex flex-col">{children}</main>
-        </ThemeProvider>
+        <QueryProvider>
+          <ThemeProvider>
+            <SanctuaryHeader />
+            <GlobalCommandPalette />
+            <main className="flex-1 flex flex-col">{children}</main>
+          </ThemeProvider>
+        </QueryProvider>
       </body>
     </html>
   );

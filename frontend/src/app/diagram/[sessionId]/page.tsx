@@ -86,8 +86,8 @@ export default function DiagramPage() {
         setSelectedDiagram(newDiagram);
         setCustomPrompt('');
       }
-    } catch (err: any) {
-      setDiagramError(err.message || 'Failed to synthesize mindmap from literature.');
+    } catch (err: unknown) {
+      setDiagramError(err instanceof Error ? err.message : 'Failed to synthesize mindmap from literature.');
     } finally {
       setGenerating(false);
     }

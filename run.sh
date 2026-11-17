@@ -113,9 +113,13 @@ start_frontend() {
         exit 1
     fi
 
-    local pkg_manager="pnpm"
-    if ! command -v pnpm &>/dev/null; then
-        pkg_manager="npm run"
+    local pkg_manager="bun"
+    if ! command -v bun &>/dev/null; then
+        if command -v pnpm &>/dev/null; then
+            pkg_manager="pnpm"
+        else
+            pkg_manager="npm run"
+        fi
     fi
 
     (

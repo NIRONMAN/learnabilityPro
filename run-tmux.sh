@@ -21,9 +21,13 @@ fi
 tmux kill-session -t "$SESSION_NAME" 2>/dev/null || true
 
 # Determine frontend package manager
-PKG_MANAGER="pnpm"
-if ! command -v pnpm &>/dev/null; then
-    PKG_MANAGER="npm run"
+PKG_MANAGER="bun"
+if ! command -v bun &>/dev/null; then
+    if command -v pnpm &>/dev/null; then
+        PKG_MANAGER="pnpm"
+    else
+        PKG_MANAGER="npm run"
+    fi
 fi
 
 # 1. Create a detached session running Spring Boot in the top pane

@@ -76,12 +76,19 @@ export interface IngestResponse {
 const API_BASE = process.env.NEXT_PUBLIC_BACKEND_URL || 'http://localhost:8080/api';
 
 export const authStorage = {
-  getToken: () => (typeof window !== 'undefined' ? localStorage.getItem('token') : null),
+  getToken: () =>
+    typeof window !== 'undefined' && typeof localStorage !== 'undefined'
+      ? localStorage.getItem('token')
+      : null,
   setToken: (token: string) => {
-    if (typeof window !== 'undefined') localStorage.setItem('token', token);
+    if (typeof window !== 'undefined' && typeof localStorage !== 'undefined') {
+      localStorage.setItem('token', token);
+    }
   },
   removeToken: () => {
-    if (typeof window !== 'undefined') localStorage.removeItem('token');
+    if (typeof window !== 'undefined' && typeof localStorage !== 'undefined') {
+      localStorage.removeItem('token');
+    }
   },
 };
 
@@ -154,7 +161,7 @@ export const api = {
     message: string,
     onChunk: (chunk: string) => void,
     onComplete: () => void,
-    onError: (err: any) => void,
+    onError: (err: unknown) => void,
     options?: { videoTimestampSec?: number; playbackContext?: string }
   ) => {
     const token = authStorage.getToken();

@@ -103,8 +103,8 @@ export default function FlashcardPlayerPage() {
         setCustomPrompt('');
         setInlineContext('');
       }
-    } catch (err: any) {
-      setDeckError(err.message || 'Failed to synthesize active recall deck from literature.');
+    } catch (err: unknown) {
+      setDeckError(err instanceof Error ? err.message : 'Failed to synthesize active recall deck from literature.');
     } finally {
       setGenerating(false);
     }

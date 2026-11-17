@@ -1,36 +1,42 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
-import { api, authStorage, StudySession } from '@/lib/api';
+import { authStorage, StudySession } from '@/lib/api';
+import {
+  useCurrentUser,
+  useSessions,
+  useCreateSessionMutation,
+  useDeleteSessionMutation,
+  useUploadPdfMutation,
+  useIngestYouTubeMutation,
+} from '@/lib/queries';
 import {
   BookOpen,
-  BrainCircuit,
-  Sparkles,
   Plus,
   FileText,
   Youtube,
   Trash2,
   Clock,
   ArrowRight,
-  UploadCloud,
   LogOut,
   FolderOpen,
-  ShieldCheck,
   Network,
   RotateCcw,
-  GraduationCap,
   X,
   Search,
-  Filter
 } from 'lucide-react';
 
 export default function DashboardPage() {
   const router = useRouter();
-  const [currentUser, setCurrentUser] = useState<any>(null);
-  const [sessions, setSessions] = useState<StudySession[]>([]);
-  const [loading, setLoading] = useState(true);
+  const { data: currentUser, isLoading: isUserLoading, isError: isUserError } = useCurrentUser();
+  const { data: sessions = [], isLoading: isSessionsLoading, refetch: refetchSessions } = useSessions();
+  const createSessionMutation = useCreateSessionMutation();
+  const deleteSessionMutation = useDeleteSessionMutation();
+  const uploadPdfMutation = useUploadPdfMutation();
+  const ingestYouTubeMutation = useIngestYouTubeMutation();
+
   const [filterType, setFilterType] = useState<string>('ALL');
   const [searchQuery, setSearchQuery] = useState('');
 
@@ -45,36 +51,14 @@ export default function DashboardPage() {
   const [submitting, setSubmitting] = useState(false);
   const [modalError, setModalError] = useState<string | null>(null);
 
-  // Strong Authentication Gate: Non-authenticated users are redirected back to landing page
+  // Authentication gate: redirect if no token or token is invalid
   useEffect(() => {
     const token = authStorage.getToken();
-    if (!token) {
+    if (!token || isUserError) {
+      authStorage.removeToken();
       router.replace('/?auth=login');
-      return;
     }
-    api.getMe()
-      .then((user) => {
-        setCurrentUser(user);
-        loadSessions();
-      })
-      .catch(() => {
-        authStorage.removeToken();
-        router.replace('/?auth=login');
-      });
-  }, [router]);
-
-  const loadSessions = async () => {
-    try {
-      setLoading(true);
-      const data = await api.listSessions();
-      setSessions(data || []);
-    } catch (err) {
-      console.error('Failed to load sessions:', err);
-      setSessions([]);
-    } finally {
-      setLoading(false);
-    }
-  };
+  }, [router, isUserError]);
 
   const getSessionUrl = (id: string, type?: string) => {
     if (type === 'FLASHCARD') return `/flashcard/${id}`;
@@ -97,7 +81,7 @@ export default function DashboardPage() {
         const resolvedTitle =
           trimmedTitle || (selectedFile.name ? selectedFile.name.replace(/\.pdf$/i, '').trim() : 'PDF Study Session');
 
-        const created = await api.createSession({
+        const created = await createSessionMutation.mutateAsync({
           title: resolvedTitle,
           sessionType,
           contextType: 'PDF',
@@ -106,15 +90,15 @@ export default function DashboardPage() {
         });
         createdSessionId = created.id;
         try {
-          await api.uploadPdf(selectedFile, created.id);
+          await uploadPdfMutation.mutateAsync({ file: selectedFile, sessionId: created.id });
         } catch (uploadErr) {
-          await api.deleteSession(created.id).catch(() => {});
+          await deleteSessionMutation.mutateAsync(created.id).catch(() => {});
           throw uploadErr;
         }
       } else if (modalMode === 'YOUTUBE') {
         if (!youtubeUrl.trim()) throw new Error('Please enter a valid YouTube URL');
         const resolvedTitle = trimmedTitle || undefined;
-        const res = await api.ingestYouTube({ url: youtubeUrl.trim(), title: resolvedTitle });
+        const res = await ingestYouTubeMutation.mutateAsync({ url: youtubeUrl.trim(), title: resolvedTitle });
         createdSessionId = res.sessionId;
       } else {
         let resolvedTitle = trimmedTitle;
@@ -122,7 +106,7 @@ export default function DashboardPage() {
           const firstLine = contextText.trim().split('\n')[0]?.trim();
           resolvedTitle = (firstLine ? firstLine.slice(0, 40).trim() : '') || 'Generalized Study Session';
         }
-        const created = await api.createSession({
+        const created = await createSessionMutation.mutateAsync({
           title: resolvedTitle,
           sessionType,
           contextType: 'TOPIC',
@@ -137,10 +121,11 @@ export default function DashboardPage() {
       if (createdSessionId) {
         router.push(getSessionUrl(createdSessionId, targetSessionType));
       } else {
-        await loadSessions();
+        await refetchSessions();
       }
-    } catch (err: any) {
-      setModalError(err.message || 'Failed to create session on server.');
+    } catch (err: unknown) {
+      const errorMessage = err instanceof Error ? err.message : 'Failed to create session on server.';
+      setModalError(errorMessage);
     } finally {
       setSubmitting(false);
     }
@@ -148,24 +133,24 @@ export default function DashboardPage() {
 
   const handleInitializeStarter = async (starterType: 'vaswani' | 'deepseek' | 'cs229') => {
     try {
-      setLoading(true);
+      setSubmitting(true);
       let created: StudySession | null = null;
       if (starterType === 'vaswani') {
-        created = await api.createSession({
+        created = await createSessionMutation.mutateAsync({
           title: 'Attention Is All You Need (Vaswani et al. 2017)',
           sessionType: 'LEARN',
           contextType: 'PDF',
           contextText: '§ 3.2 Multi-Head Attention Mechanism\nAn attention function can be described as mapping a query and a set of key-value pairs to an output, where the query, keys, values, and output are all vectors. The output is computed as a weighted sum of the values, where the weight assigned to each value is computed by a compatibility function of the query with the corresponding key.\n\nAttention(Q, K, V) = softmax(QKᵀ / √d_k)V\n\nDividing by √d_k prevents the dot products from growing excessively large for large key dimensions, avoiding saturation in regions of vanishing gradients.\n\n§ 4.0 Complexity Analysis\nMaximum path length between any two word positions is strictly O(1) in self-attention, compared to O(n) in recurrent layers, enabling full parallelization across training tokens.'
         });
       } else if (starterType === 'deepseek') {
-        created = await api.createSession({
+        created = await createSessionMutation.mutateAsync({
           title: 'DeepSeek-R1: Mathematical Reasoning via GRPO',
           sessionType: 'FLASHCARD',
           contextType: 'TOPIC',
           contextText: '§ 2.1 Rule-Based Reward Verification\nTraditional RLHF relies on neural reward models that suffer from reward hacking and drift during long chain-of-thought exploration. DeepSeek-R1 enforces deterministic rule-based verification: compiler pass/fail execution for code and ground-truth symbolic equivalence for mathematical proofs.\n\n§ 3.1 Group Relative Policy Optimization (GRPO)\nTo mitigate the substantial memory overhead of training a separate value network equal in size to the policy model, GRPO samples a group of G candidate outputs for each query and computes normalized relative advantages across the sampled group.\n\nJ_GRPO(θ) = E [ 1/G ∑ (min(r_i A_i, clip(...)A_i)) - β D_KL(π_θ || π_ref) ]'
         });
       } else if (starterType === 'cs229') {
-        created = await api.createSession({
+        created = await createSessionMutation.mutateAsync({
           title: 'Stanford CS229: Gradient Descent & Normal Equations',
           sessionType: 'DIAGRAM',
           contextType: 'YOUTUBE',
@@ -176,12 +161,12 @@ export default function DashboardPage() {
       if (created?.id) {
         router.push(getSessionUrl(created.id, created.sessionType));
       } else {
-        await loadSessions();
+        await refetchSessions();
       }
-    } catch (err: any) {
+    } catch (err: unknown) {
       console.error('Failed to initialize starter:', err);
     } finally {
-      setLoading(false);
+      setSubmitting(false);
     }
   };
 
@@ -189,10 +174,9 @@ export default function DashboardPage() {
     e.stopPropagation();
     if (!confirm('Are you sure you want to remove this study session from your workspace?')) return;
     try {
-      await api.deleteSession(id).catch(() => {});
-      setSessions((prev) => prev.filter((s) => s.id !== id));
-    } catch {
-      setSessions((prev) => prev.filter((s) => s.id !== id));
+      await deleteSessionMutation.mutateAsync(id);
+    } catch (err: unknown) {
+      console.error('Failed to delete session:', err);
     }
   };
 
@@ -219,6 +203,8 @@ export default function DashboardPage() {
     return matchesFilter && matchesSearch;
   });
 
+  const loading = isUserLoading || isSessionsLoading;
+
   return (
     <div className="max-w-7xl mx-auto px-4 sm:px-6 py-8 w-full flex-1 space-y-8 font-sans">
       {/* Top Banner / Academic Workspace Identity */}
@@ -226,7 +212,7 @@ export default function DashboardPage() {
         <div>
           <div className="inline-flex items-center gap-2 px-2.5 py-1 rounded-md border border-rule-border bg-surface-elevated text-xs font-mono text-ink-muted mb-2">
             <span className="w-2 h-2 rounded-full bg-accent-emerald"></span>
-            <span className="text-ink-primary font-medium">Scholar Workspace</span>
+            <span className="text-ink-primary font-medium">{currentUser?.name || 'Scholar Workspace'}</span>
             <span className="text-rule-strong">·</span>
             <span className="text-accent-cyan">Active Ingestion Active</span>
           </div>
@@ -293,7 +279,7 @@ export default function DashboardPage() {
             { id: 'ALL', label: 'All Sanctuaries' },
             { id: 'LEARN', label: 'Socratic Tutor' },
             { id: 'FLASHCARD', label: 'Active Recall' },
-            { id: 'DIAGRAM', label: 'Concept Tree' }
+            { id: 'DIAGRAM', label: 'Concept Tree' },
           ].map((tab) => (
             <button
               key={tab.id}

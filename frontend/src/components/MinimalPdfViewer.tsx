@@ -18,6 +18,8 @@ import {
 } from 'lucide-react';
 import type { PDFDocumentProxy } from 'pdfjs-dist';
 
+type PDFJSLib = typeof import('pdfjs-dist');
+
 export interface MinimalPdfViewerProps {
   pdfUrl: string;
   onCiteText: (quoteText: string, reference?: string) => void;
@@ -36,7 +38,7 @@ export function MinimalPdfViewer({
   const containerRef = useRef<HTMLDivElement>(null);
   const scrollContainerRef = useRef<HTMLDivElement>(null);
 
-  const [pdfjs, setPdfjs] = useState<any>(null);
+  const [pdfjs, setPdfjs] = useState<PDFJSLib | null>(null);
   const [pdfDoc, setPdfDoc] = useState<PDFDocumentProxy | null>(null);
   const [numPages, setNumPages] = useState<number>(0);
   const [currentPage, setCurrentPage] = useState<number>(1);
@@ -70,7 +72,7 @@ export function MinimalPdfViewer({
       .then((pdfjsLib) => {
         if (cancelled) return;
         pdfjsLib.GlobalWorkerOptions.workerSrc = '/pdf.worker.min.mjs';
-        (window as any).__pdfjsLib = pdfjsLib;
+        (window as unknown as { __pdfjsLib?: PDFJSLib }).__pdfjsLib = pdfjsLib;
         setPdfjs(pdfjsLib);
 
         const loadingTask = pdfjsLib.getDocument({
@@ -501,8 +503,13 @@ export function MinimalPdfViewer({
 /**
  * Individual Page Renderer with Canvas Graphics + In-DOM Transparent TextLayer
  */
+interface RenderTask {
+  cancel: () => Promise<void> | void;
+  promise: Promise<unknown>;
+}
+
 interface PdfPageProps {
-  pdfjs: any;
+  pdfjs: PDFJSLib | null;
   pdfDoc: PDFDocumentProxy;
   pageNumber: number;
   scale: number;
@@ -512,7 +519,7 @@ function PdfPage({ pdfjs, pdfDoc, pageNumber, scale }: PdfPageProps) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const textLayerRef = useRef<HTMLDivElement>(null);
   const [dimensions, setDimensions] = useState<{ width: number; height: number }>({ width: 0, height: 0 });
-  const activeTaskRef = useRef<any>(null);
+  const activeTaskRef = useRef<RenderTask | null>(null);
 
   useEffect(() => {
     let isCurrent = true;
@@ -569,8 +576,8 @@ function PdfPage({ pdfjs, pdfDoc, pageNumber, scale }: PdfPageProps) {
 
         await task.promise;
         activeTaskRef.current = null;
-      } catch (err: any) {
-        if (err?.name !== 'RenderingCancelledException') {
+      } catch (err: unknown) {
+        if (err && typeof err === 'object' && 'name' in err && (err as { name: string }).name !== 'RenderingCancelledException') {
           console.warn('[PDF] Render exception:', err);
         }
       }

@@ -58,6 +58,34 @@ function formatSeconds(totalSec: number): string {
   return `${String(m).padStart(2, '0')}:${String(s).padStart(2, '0')}`;
 }
 
+interface YTPlayer {
+  seekTo: (seconds: number, allowSeekAhead: boolean) => void;
+  playVideo?: () => void;
+  pauseVideo?: () => void;
+  getCurrentTime?: () => number;
+  destroy?: () => void;
+}
+
+interface YTPlayerEvent {
+  target: YTPlayer;
+  data?: number;
+}
+
+interface WindowWithYT extends Window {
+  YT?: {
+    Player: new (
+      elementId: string,
+      options: {
+        events?: {
+          onReady?: (event: YTPlayerEvent) => void;
+          onStateChange?: (event: YTPlayerEvent) => void;
+        };
+      }
+    ) => YTPlayer;
+  };
+  onYouTubeIframeAPIReady?: () => void;
+}
+
 export function SourceMaterialViewer({
   session,
   hasPdfFile,
@@ -78,7 +106,7 @@ export function SourceMaterialViewer({
   // Video playback tracking
   const [currentPlaybackSec, setCurrentPlaybackSec] = useState<number>(0);
   const [isVideoPaused, setIsVideoPaused] = useState<boolean>(true);
-  const playerRef = useRef<any>(null);
+  const playerRef = useRef<YTPlayer | null>(null);
   const playerIframeId = useMemo(() => `yt-player-${session.id}`, [session.id]);
 
   // Floating selection action state for reader/transcript text
@@ -263,7 +291,8 @@ export function SourceMaterialViewer({
     let pollInterval: NodeJS.Timeout | null = null;
 
     const setupPlayer = () => {
-      const YT = (window as any).YT;
+      const win = window as unknown as WindowWithYT;
+      const YT = win.YT;
       if (!YT || !YT.Player) return;
 
       const iframeEl = document.getElementById(playerIframeId);
@@ -278,12 +307,12 @@ export function SourceMaterialViewer({
 
         playerRef.current = new YT.Player(playerIframeId, {
           events: {
-            onReady: (event: any) => {
+            onReady: (event: YTPlayerEvent) => {
               if (youtubeStartSec !== null && youtubeStartSec !== undefined) {
                 event.target.seekTo(youtubeStartSec, true);
               }
             },
-            onStateChange: (event: any) => {
+            onStateChange: (event: YTPlayerEvent) => {
               const player = event.target;
               const time = Math.floor(player.getCurrentTime?.() || 0);
               const paused = event.data === 2; // YT.PlayerState.PAUSED
@@ -317,7 +346,8 @@ export function SourceMaterialViewer({
       }
     };
 
-    if (!(window as any).YT || !(window as any).YT.Player) {
+    const win = window as unknown as WindowWithYT;
+    if (!win.YT || !win.YT.Player) {
       const existingScript = document.getElementById('youtube-iframe-api');
       if (!existingScript) {
         const tag = document.createElement('script');
@@ -326,7 +356,7 @@ export function SourceMaterialViewer({
         const firstScriptTag = document.getElementsByTagName('script')[0];
         firstScriptTag?.parentNode?.insertBefore(tag, firstScriptTag);
       }
-      (window as any).onYouTubeIframeAPIReady = setupPlayer;
+      win.onYouTubeIframeAPIReady = setupPlayer;
     } else {
       setupPlayer();
     }

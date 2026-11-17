@@ -588,8 +588,8 @@ export default function LearnabilityLandingAndStudio() {
           throw new Error('Registration failed: no token received from server');
         }
       }
-    } catch (err: any) {
-      setAuthError(err.message || 'Authentication failed. Please check credentials or backend availability.');
+    } catch (err: unknown) {
+      setAuthError(err instanceof Error ? err.message : 'Authentication failed. Please check credentials or backend availability.');
     } finally {
       setIsSubmittingAuth(false);
     }
@@ -613,8 +613,8 @@ export default function LearnabilityLandingAndStudio() {
       } else {
         throw new Error('Failed to obtain authenticated token from server');
       }
-    } catch (err: any) {
-      setAuthError(err.message || 'Scholar pass generation failed. Please sign in manually.');
+    } catch (err: unknown) {
+      setAuthError(err instanceof Error ? err.message : 'Scholar pass generation failed. Please sign in manually.');
       setIsAuthModalOpen(true);
     } finally {
       setIsGeneratingPass(false);

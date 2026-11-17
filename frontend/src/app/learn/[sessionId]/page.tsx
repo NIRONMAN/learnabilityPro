@@ -251,7 +251,7 @@ export default function LearnWorkspacePage() {
           setMessages((prev) => [...prev, assistantMessage]);
           setStreamingResponse('');
         },
-        (err) => {
+        (err: unknown) => {
           setIsStreaming(false);
           if (accumulatedTokens.trim()) {
             const assistantMessage: ChatMessage = {
@@ -264,7 +264,8 @@ export default function LearnWorkspacePage() {
             setMessages((prev) => [...prev, assistantMessage]);
           }
           setStreamingResponse('');
-          setStreamError(err.message || 'Stream connection interrupted. Partial response preserved.');
+          const errMessage = err instanceof Error ? err.message : 'Stream connection interrupted. Partial response preserved.';
+          setStreamError(errMessage);
         },
         session?.contextType === 'YOUTUBE' && videoPlayback.currentTime > 0
           ? {
@@ -273,7 +274,7 @@ export default function LearnWorkspacePage() {
             }
           : undefined
       );
-    } catch (err: any) {
+    } catch (err: unknown) {
       setIsStreaming(false);
       if (accumulatedTokens.trim()) {
         const assistantMessage: ChatMessage = {
@@ -286,7 +287,8 @@ export default function LearnWorkspacePage() {
         setMessages((prev) => [...prev, assistantMessage]);
       }
       setStreamingResponse('');
-      setStreamError(err.message || 'Failed to connect to AI tutor streaming endpoint.');
+      const errMessage = err instanceof Error ? err.message : 'Failed to connect to AI tutor streaming endpoint.';
+      setStreamError(errMessage);
     }
   };
 
