@@ -1,0 +1,4 @@
+# Ignore vendored third-party libraries and minified assets from GitHub Language statistics
+frontend/public/** linguist-vendored
+*.min.mjs linguist-vendored
+*.min.js linguist-vendored
