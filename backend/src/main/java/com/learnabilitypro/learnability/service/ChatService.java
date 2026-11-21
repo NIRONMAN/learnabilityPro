@@ -34,6 +34,26 @@ public class ChatService {
     private final RagService ragService;
     private final StudySessionService sessionService;
     private final ChatMessageRepository messageRepository;
+    private final ContextRoutingService contextRoutingService;
+    private final ContextCompactionService contextCompactionService;
+
+    @org.springframework.beans.factory.annotation.Autowired
+    public ChatService(
+            ChatClient chatClient,
+            ChatMemory chatMemory,
+            RagService ragService,
+            StudySessionService sessionService,
+            ChatMessageRepository messageRepository,
+            ContextRoutingService contextRoutingService,
+            ContextCompactionService contextCompactionService) {
+        this.chatClient = chatClient;
+        this.chatMemory = chatMemory;
+        this.ragService = ragService;
+        this.sessionService = sessionService;
+        this.messageRepository = messageRepository;
+        this.contextRoutingService = contextRoutingService;
+        this.contextCompactionService = contextCompactionService;
+    }
 
     public ChatService(
             ChatClient chatClient,
@@ -41,11 +61,15 @@ public class ChatService {
             RagService ragService,
             StudySessionService sessionService,
             ChatMessageRepository messageRepository) {
-        this.chatClient = chatClient;
-        this.chatMemory = chatMemory;
-        this.ragService = ragService;
-        this.sessionService = sessionService;
-        this.messageRepository = messageRepository;
+        this(
+                chatClient,
+                chatMemory,
+                ragService,
+                sessionService,
+                messageRepository,
+                new ContextRoutingService("gemini-flash-lite-latest", 0.15, 25000),
+                new ContextCompactionService(chatClient, 6, 4)
+        );
     }
 
     @Transactional
@@ -69,7 +93,10 @@ public class ChatService {
                 .build();
         messageRepository.save(userMsg);
 
-        String systemPrompt = buildSystemPrompt(session, videoTimestampSec, playbackContext);
+        List<ChatMessage> history = messageRepository.findBySessionIdOrderByCreatedAtAsc(sessionId);
+        String compactedSummary = contextCompactionService.compactConversationIfNeeded(sessionId, history);
+
+        String systemPrompt = buildSystemPrompt(session, videoTimestampSec, playbackContext, compactedSummary);
         MessageChatMemoryAdvisor memoryAdvisor = MessageChatMemoryAdvisor.builder(chatMemory).build();
 
         String assistantResponse;
@@ -139,7 +166,10 @@ public class ChatService {
                 .build();
         messageRepository.save(userMsg);
 
-        String systemPrompt = buildSystemPrompt(session, videoTimestampSec, playbackContext);
+        List<ChatMessage> history = messageRepository.findBySessionIdOrderByCreatedAtAsc(sessionId);
+        String compactedSummary = contextCompactionService.compactConversationIfNeeded(sessionId, history);
+
+        String systemPrompt = buildSystemPrompt(session, videoTimestampSec, playbackContext, compactedSummary);
         MessageChatMemoryAdvisor memoryAdvisor = MessageChatMemoryAdvisor.builder(chatMemory).build();
 
         StringBuilder fullResponse = new StringBuilder();
@@ -212,17 +242,23 @@ public class ChatService {
         if (session == null || session.getContextType() == null) {
             return false;
         }
-        if (session.getContextType() == ContextType.PDF) {
-            return true;
-        }
-        return ragService != null && session.getId() != null && ragService.hasVectors(session.getId());
+        boolean hasVectors = ragService != null && session.getId() != null && ragService.hasVectors(session.getId());
+        return contextRoutingService.shouldUseRag(session, hasVectors);
     }
 
     public String buildSystemPrompt(StudySession session) {
-        return buildSystemPrompt(session, null, null);
+        return buildSystemPrompt(session, null, null, null);
     }
 
     public String buildSystemPrompt(StudySession session, Integer videoTimestampSec, String playbackContext) {
+        return buildSystemPrompt(session, videoTimestampSec, playbackContext, null);
+    }
+
+    public String buildSystemPrompt(
+            StudySession session,
+            Integer videoTimestampSec,
+            String playbackContext,
+            String compactedSummary) {
         StringBuilder sb = new StringBuilder();
         sb.append("You are an intelligent, pedagogically grounded AI tutor for Learnability Pro.\n");
         sb.append("Your goal is to guide the student toward deep mastery, active recall, and conceptual clarity.\n");
@@ -236,6 +272,12 @@ public class ChatService {
             sb.append(session.getContextText()).append("\n");
         } else {
             sb.append("\nNo specific reference source or syllabus has been attached for this session. Act as an expert, generalized Socratic academic tutor. Draw upon your broad general knowledge to teach, explain, test understanding, and answer any questions thoroughly and insightfully without saying you lack context.\n");
+        }
+
+        if (compactedSummary != null && !compactedSummary.isBlank()) {
+            sb.append("\n=== COMPACTED EARLIER CONVERSATION HISTORY ===\n");
+            sb.append("The following is a condensed summary of key learning milestones, student questions, and concepts covered earlier in this discussion:\n");
+            sb.append(compactedSummary).append("\n");
         }
 
         // Real-time video playback context awareness

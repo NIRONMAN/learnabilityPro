@@ -35,16 +35,34 @@ public class PdfIngestionService {
     private final ChatClient chatClient;
     private final StudySessionService sessionService;
     private final StudySessionRepository sessionRepository;
+    private final ContextRoutingService contextRoutingService;
+
+    @org.springframework.beans.factory.annotation.Autowired
+    public PdfIngestionService(
+            RagService ragService,
+            ChatClient chatClient,
+            StudySessionService sessionService,
+            StudySessionRepository sessionRepository,
+            ContextRoutingService contextRoutingService) {
+        this.ragService = ragService;
+        this.chatClient = chatClient;
+        this.sessionService = sessionService;
+        this.sessionRepository = sessionRepository;
+        this.contextRoutingService = contextRoutingService;
+    }
 
     public PdfIngestionService(
             RagService ragService,
             ChatClient chatClient,
             StudySessionService sessionService,
             StudySessionRepository sessionRepository) {
-        this.ragService = ragService;
-        this.chatClient = chatClient;
-        this.sessionService = sessionService;
-        this.sessionRepository = sessionRepository;
+        this(
+                ragService,
+                chatClient,
+                sessionService,
+                sessionRepository,
+                new ContextRoutingService("gemini-flash-lite-latest", 0.15, 25000)
+        );
     }
 
     @Transactional
@@ -122,9 +140,16 @@ public class PdfIngestionService {
         ragService.addDocuments(taggedDocuments);
 
         String summary = generateQuickSummary(filename, combinedSample.toString());
+        String fullExtractedStr = fullExtracted.toString().trim();
+        boolean exceedsSmartZone = contextRoutingService.exceedsSmartZone(fullExtractedStr);
+
         String documentContent = "Document: " + filename + "\n\n### Summary\n" + summary;
-        if (!fullExtracted.isEmpty()) {
-            documentContent += "\n\n### Extracted Document Content\n\n" + fullExtracted.toString().trim();
+        if (!fullExtractedStr.isEmpty()) {
+            if (exceedsSmartZone) {
+                documentContent += "\n\n*(Full document exceeds the single-turn Smart Zone and is indexed in Vector Knowledge Base for precision RAG retrieval.)*";
+            } else {
+                documentContent += "\n\n### Extracted Document Content\n\n" + fullExtractedStr;
+            }
         }
         sessionService.appendContextText(sessionId, documentContent);
 

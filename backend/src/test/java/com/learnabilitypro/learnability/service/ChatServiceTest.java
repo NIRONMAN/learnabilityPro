@@ -205,5 +205,38 @@ class ChatServiceTest {
         assertThat(prompt).contains("Ciri runs containers up to eight times faster");
         assertThat(prompt).contains("what did he just say?");
     }
+
+    @Test
+    void sendMessageWhenChatExceedsThresholdIncludesCompactedSummaryInSystemPrompt() {
+        StudySession session = StudySession.builder()
+                .id(sessionId)
+                .title("Operating Systems")
+                .sessionType(SessionType.LEARN)
+                .contextType(ContextType.TOPIC)
+                .build();
+
+        when(sessionService.getSessionEntity(sessionId, userId)).thenReturn(session);
+
+        java.util.List<ChatMessage> existingMessages = new java.util.ArrayList<>();
+        for (int i = 1; i <= 8; i++) {
+            existingMessages.add(ChatMessage.builder()
+                    .session(session)
+                    .sender(i % 2 == 1 ? MessageSender.USER : MessageSender.ASSISTANT)
+                    .content("Discussion on process scheduling #" + i)
+                    .build());
+        }
+        when(messageRepository.findBySessionIdOrderByCreatedAtAsc(sessionId)).thenReturn(existingMessages);
+        when(messageRepository.save(any(ChatMessage.class))).thenAnswer(invocation -> invocation.getArgument(0));
+
+        org.mockito.ArgumentCaptor<String> promptCaptor = org.mockito.ArgumentCaptor.forClass(String.class);
+        when(chatClient.prompt().system(promptCaptor.capture()).user(anyString()).advisors(any(java.util.function.Consumer.class)).call().content())
+                .thenReturn("Round-robin scheduling allocates fixed time slices.");
+
+        ChatMessageDto response = chatService.sendMessage(sessionId, userId, "Explain round robin");
+
+        assertThat(response).isNotNull();
+        String sentSystemPrompt = promptCaptor.getValue();
+        assertThat(sentSystemPrompt).contains("=== COMPACTED EARLIER CONVERSATION HISTORY ===");
+    }
 }
 

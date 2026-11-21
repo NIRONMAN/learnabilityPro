@@ -111,4 +111,35 @@ class PdfIngestionServiceTest {
                 .isInstanceOf(IllegalArgumentException.class)
                 .hasMessageContaining("does not contain extractable text");
     }
+
+    @Test
+    void testIngestPdfLargeDocumentExceedsSmartZoneAndSavesSummaryNotice() throws IOException {
+        UUID sessionId = UUID.randomUUID();
+        UUID userId = UUID.randomUUID();
+
+        ContextRoutingService routingService = new ContextRoutingService("gemini-flash-lite-latest", 0.15, 5);
+        PdfIngestionService ingestionService = new PdfIngestionService(ragService, chatClient, sessionService, sessionRepository, routingService);
+
+        StudySession session = StudySession.builder()
+                .id(sessionId)
+                .title("Massive Textbook")
+                .sessionType(SessionType.LEARN)
+                .contextType(ContextType.PDF)
+                .build();
+
+        when(sessionService.getSessionEntity(eq(sessionId), eq(userId))).thenReturn(session);
+
+        byte[] pdfBytes = createSamplePdf("Long dense textbook chapter with multiple sections and comprehensive theorems.");
+        MockMultipartFile file = new MockMultipartFile("file", "textbook.pdf", "application/pdf", pdfBytes);
+
+        org.mockito.ArgumentCaptor<String> contentCaptor = org.mockito.ArgumentCaptor.forClass(String.class);
+
+        IngestResponse response = ingestionService.ingestPdf(file, sessionId, userId);
+
+        assertThat(response).isNotNull();
+        verify(sessionService).appendContextText(eq(sessionId), contentCaptor.capture());
+        String savedContent = contentCaptor.getValue();
+        assertThat(savedContent).contains("*(Full document exceeds the single-turn Smart Zone and is indexed in Vector Knowledge Base for precision RAG retrieval.)*");
+        assertThat(savedContent).doesNotContain("### Extracted Document Content");
+    }
 }

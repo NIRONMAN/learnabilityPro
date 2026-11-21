@@ -57,12 +57,15 @@ public class YouTubeTranscriptService {
     private final StudySessionService sessionService;
     private final StudySessionRepository sessionRepository;
     private final ObjectMapper objectMapper;
+    private final ContextRoutingService contextRoutingService;
 
+    @org.springframework.beans.factory.annotation.Autowired
     public YouTubeTranscriptService(
             RagService ragService,
             ChatClient chatClient,
             StudySessionService sessionService,
-            StudySessionRepository sessionRepository) {
+            StudySessionRepository sessionRepository,
+            ContextRoutingService contextRoutingService) {
         this.httpClient = HttpClient.newBuilder()
                 .connectTimeout(Duration.ofSeconds(10))
                 .followRedirects(HttpClient.Redirect.NORMAL)
@@ -72,6 +75,21 @@ public class YouTubeTranscriptService {
         this.sessionService = sessionService;
         this.sessionRepository = sessionRepository;
         this.objectMapper = new ObjectMapper();
+        this.contextRoutingService = contextRoutingService;
+    }
+
+    public YouTubeTranscriptService(
+            RagService ragService,
+            ChatClient chatClient,
+            StudySessionService sessionService,
+            StudySessionRepository sessionRepository) {
+        this(
+                ragService,
+                chatClient,
+                sessionService,
+                sessionRepository,
+                new ContextRoutingService("gemini-flash-lite-latest", 0.15, 25000)
+        );
     }
 
     @Transactional
@@ -150,7 +168,13 @@ public class YouTubeTranscriptService {
 
         // 5. Generate concise, grounded pedagogical summary
         String summary = summarizeTranscript(sessionTitle, transcriptText);
-        String combined = "YouTube Video: " + request.url() + "\n\n### Lecture Summary\n" + summary + "\n\n### Lecture Transcript\n\n" + transcriptText;
+        boolean exceedsSmartZone = contextRoutingService.exceedsSmartZone(transcriptText);
+        String combined;
+        if (exceedsSmartZone) {
+            combined = "YouTube Video: " + request.url() + "\n\n### Lecture Summary\n" + summary + "\n\n*(Full lecture transcript exceeds the single-turn Smart Zone and is indexed in Vector Store for timestamped RAG retrieval.)*";
+        } else {
+            combined = "YouTube Video: " + request.url() + "\n\n### Lecture Summary\n" + summary + "\n\n### Lecture Transcript\n\n" + transcriptText;
+        }
         
         session.setTitle(sessionTitle);
         session.setContextText(combined);
