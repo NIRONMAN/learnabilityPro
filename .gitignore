@@ -9,6 +9,8 @@ out/
 build/
 dist/
 target/
+*.jar
+*.sha256
 
 # Logs
 logs/
