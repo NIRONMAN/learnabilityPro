@@ -103,10 +103,25 @@ async function request<T>(path: string, options: RequestInit = {}): Promise<T> {
     headers.set('Content-Type', 'application/json');
   }
 
-  const res = await fetch(`${API_BASE}${path}`, {
-    ...options,
-    headers,
-  });
+  const primaryUrl = `${API_BASE}${path}`;
+  let res: Response;
+  try {
+    res = await fetch(primaryUrl, {
+      ...options,
+      headers,
+    });
+  } catch (err) {
+    // If direct backend URL fetch failed (DNS resolution failure, CORS, network timeout, adblocker),
+    // fallback transparently to relative /api which routes via Next.js reverse proxy
+    if (typeof window !== 'undefined' && !primaryUrl.startsWith('/api') && API_BASE !== '/api') {
+      res = await fetch(`/api${path}`, {
+        ...options,
+        headers,
+      });
+    } else {
+      throw err;
+    }
+  }
 
   if (!res.ok) {
     if (res.status === 401) {
@@ -165,18 +180,32 @@ export const api = {
     options?: { videoTimestampSec?: number; playbackContext?: string }
   ) => {
     const token = authStorage.getToken();
-    let url = `${API_BASE}/chat/${sessionId}/stream?message=${encodeURIComponent(message)}${token ? `&token=${token}` : ''}`;
-    if (options?.videoTimestampSec !== undefined && options.videoTimestampSec !== null) {
-      url += `&videoTimestampSec=${encodeURIComponent(options.videoTimestampSec)}`;
-    }
-    if (options?.playbackContext) {
-      url += `&playbackContext=${encodeURIComponent(options.playbackContext)}`;
-    }
-    
+    const buildUrl = (base: string) => {
+      let u = `${base}/chat/${sessionId}/stream?message=${encodeURIComponent(message)}${token ? `&token=${token}` : ''}`;
+      if (options?.videoTimestampSec !== undefined && options.videoTimestampSec !== null) {
+        u += `&videoTimestampSec=${encodeURIComponent(options.videoTimestampSec)}`;
+      }
+      if (options?.playbackContext) {
+        u += `&playbackContext=${encodeURIComponent(options.playbackContext)}`;
+      }
+      return u;
+    };
+
     try {
-      const response = await fetch(url, {
-        headers: token ? { Authorization: `Bearer ${token}` } : {},
-      });
+      let response: Response;
+      try {
+        response = await fetch(buildUrl(API_BASE), {
+          headers: token ? { Authorization: `Bearer ${token}` } : {},
+        });
+      } catch (fetchErr) {
+        if (typeof window !== 'undefined' && API_BASE !== '/api' && !API_BASE.startsWith('/')) {
+          response = await fetch(buildUrl('/api'), {
+            headers: token ? { Authorization: `Bearer ${token}` } : {},
+          });
+        } else {
+          throw fetchErr;
+        }
+      }
 
       if (!response.ok) {
         if (response.status === 401) {

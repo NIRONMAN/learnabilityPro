@@ -8,6 +8,7 @@ import com.learnabilitypro.learnability.service.AuthService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
+import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.web.bind.annotation.*;
@@ -38,6 +39,9 @@ public class AuthController {
     @GetMapping("/me")
     @Operation(summary = "Get the currently authenticated user's profile")
     public ResponseEntity<UserDto> me(@AuthenticationPrincipal UserPrincipal principal) {
+        if (principal == null) {
+            return ResponseEntity.status(HttpStatus.UNAUTHORIZED).build();
+        }
         return ResponseEntity.ok(authService.getCurrentUser(principal.getId()));
     }
 }
